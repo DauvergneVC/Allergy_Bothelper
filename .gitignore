@@ -1,0 +1,20 @@
+# Environments variables
+*.env
+!*.env.example
+
+# Cache and temporary files
+.cache/
+
+# Build artifacts
+dist/
+build/
+bin/
+obj/
+artifacts/
+
+# Local configuration files
+*.local
+*.vscode/
+
+# Logs
+*.log
