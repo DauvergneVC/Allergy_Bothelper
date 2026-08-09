@@ -25,3 +25,22 @@ Para manejar las alergias:
 - /Listar -> Listar las alergias. Usable por cualquiera.
 
 El resto del bot (sin comandos), funcionara sin necesidad de comandos, asumiendo solo lectura. La primera vez que se inicie pedira el login o register de forma obligatoria.
+
+## Estructura
+
+src/
+├─ Program.cs → arranca el host, registra DI
+├─ Models/ → solo entidades (User, ShareToken)
+├─ Data/
+│ ├─ MongoDbContext.cs → conexión (único punto que conoce Mongo)
+│ └─ Repositories/
+│ ├─ IUserRepository.cs
+│ ├─ UserRepository.cs
+│ ├─ IShareTokenRepository.cs
+│ └─ ShareTokenRepository.cs
+├─ Services/
+│ ├─ AuthService.cs → lógica de login/register/autorización
+│ ├─ AllergyService.cs → Add/Remove/Listar
+│ └─ ShareService.cs → generar/revocar tokens
+├─ Commands/ → comandos del bot (usan Services)
+└─ Channels/ → adapters Telegram/WhatsApp

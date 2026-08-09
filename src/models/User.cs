@@ -25,7 +25,7 @@ public class User : IValidatableObject
         ArgumentNullException.ThrowIfNullOrWhiteSpace(password);
         ArgumentNullException.ThrowIfNull(allergies);
 
-        Id = new ObjectId();
+        Id = ObjectId.GenerateNewId();
         Email = email;
         Password = password;
         Allergies = allergies;
@@ -59,6 +59,6 @@ public class User : IValidatableObject
     private void GenerateShareToken()
     {
         // Generate a unique token for sharing allergies
-        ShareToken = new ShareToken(Id, Guid.NewGuid().ToString());
+        ShareToken = new ShareToken(Guid.NewGuid().ToString());
     }
 }

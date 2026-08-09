@@ -6,10 +6,10 @@
 .cache/
 
 # Build artifacts
-dist/
-build/
 bin/
 obj/
+dist/
+build/
 artifacts/
 
 # Local configuration files

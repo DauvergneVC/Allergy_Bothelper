@@ -5,10 +5,31 @@ using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
 
 
-// Load environment variables from .env file
+// Load environment variables from .env file an initialize MongoDB context
 DotNetEnv.Env.Load();
-string telegramApiKey = Environment.GetEnvironmentVariable("TELEGRAM_API_KEY") ?? throw new InvalidOperationException("TELEGRAM_API_KEY is not set in the environment variables.");
+string? telegramApiKey = Environment.GetEnvironmentVariable("TELEGRAM_API_KEY");
+string? whatsappApiKey = Environment.GetEnvironmentVariable("WHATSAPP_API_KEY");
+try
+{
+    string mongoUri = Environment.GetEnvironmentVariable("MONGO_URI") ?? throw new InvalidOperationException("MONGO_URI is not set in the environment variables.");
+    string mongoDatabaseName = Environment.GetEnvironmentVariable("MONGO_INITDB_DATABASE") ?? throw new InvalidOperationException("MONGO_INITDB_DATABASE is not set in the environment variables.");
 
+    // Initialize MongoDB context
+    var mongoDbContext = new MongoDbContext(mongoUri, mongoDatabaseName);
+    await mongoDbContext.PingAsync();
+
+    // Ensure indexes are created
+    await mongoDbContext.EnsureIndexesAsync();
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"Failed to connect to MongoDB: {ex.Message}");
+    return; // Exit the application if the database connection fails
+}
+
+
+
+// Telegram
 using var cts = new CancellationTokenSource();
 var bot = new TelegramBotClient(telegramApiKey, cancellationToken: cts.Token);
 var me = await bot.GetMe();
