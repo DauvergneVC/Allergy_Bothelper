@@ -59,10 +59,6 @@ public class User : IValidatableObject
     private void GenerateShareToken()
     {
         // Generate a unique token for sharing allergies
-        ShareToken = new ShareToken
-        {
-            OwnerId = Id,
-            Token = Guid.NewGuid().ToString()
-        };
+        ShareToken = new ShareToken(Id, Guid.NewGuid().ToString());
     }
 }
