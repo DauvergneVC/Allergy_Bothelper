@@ -14,6 +14,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\Allergy_Bothelper.csproj" />
   </ItemGroup>
 
