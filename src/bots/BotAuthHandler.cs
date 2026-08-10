@@ -104,7 +104,7 @@ public sealed class BotAuthHandler : IBotAuthHandler
             case "/cancel":
                 return new BotReply(BotCopy.NothingToCancel);
             case "/help":
-                return new BotReply(BotCopy.HelpCommands);
+                return HelpReply(session);
             default:
                 return new BotReply(BotCopy.UnknownCommand);
         }
@@ -155,11 +155,14 @@ public sealed class BotAuthHandler : IBotAuthHandler
             case "/logout":
                 return new BotReply(BotCopy.StepInProgress);
             case "/help":
-                return new BotReply(BotCopy.HelpCommands);
+                return HelpReply(session);
             default:
                 return new BotReply(BotCopy.UnknownCommand);
         }
     }
+
+    private static BotReply HelpReply(ChatSession session)
+        => new(session.Role == ChatRole.None ? BotCopy.HelpCommandsLoggedOut : BotCopy.HelpCommands);
 
     private static BotReply HandleRegisterEmail(ChatSession session, string input)
     {

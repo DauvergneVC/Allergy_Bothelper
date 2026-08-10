@@ -40,6 +40,18 @@ public class BotCopyTests
     }
 
     [Fact]
+    public void HelpCommandsLoggedOut_ListsOnlyLoginAndRegister()
+    {
+        Assert.Contains("/login", BotCopy.HelpCommandsLoggedOut);
+        Assert.Contains("/register", BotCopy.HelpCommandsLoggedOut);
+        Assert.DoesNotContain("/share", BotCopy.HelpCommandsLoggedOut);
+        Assert.DoesNotContain("/revoke", BotCopy.HelpCommandsLoggedOut);
+        Assert.DoesNotContain("/logout", BotCopy.HelpCommandsLoggedOut);
+        Assert.DoesNotContain("/cancel", BotCopy.HelpCommandsLoggedOut);
+        Assert.DoesNotContain("/help", BotCopy.HelpCommandsLoggedOut);
+    }
+
+    [Fact]
     public async Task AuthFailureThroughHandler_RepliesPinnedEnglish_WithNoSpanishLeak()
     {
         var fake = new FakeUserRepository();
