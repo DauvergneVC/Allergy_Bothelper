@@ -26,6 +26,13 @@ public class MongoDbContext
                 new CreateIndexOptions { Unique = true }
             )
         );
+        // Non-unique: a single share token authorizes many guests, so duplicates must be allowed.
+        await usersCollection.Indexes.CreateOneAsync(
+            new CreateIndexModel<User>(
+                Builders<User>.IndexKeys.Ascending(u => u.ShareToken),
+                new CreateIndexOptions { Unique = false }
+            )
+        );
     }
 
     public async Task PingAsync()

@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 
+[BsonIgnoreExtraElements]
 public class User : IValidatableObject
 {
     [BsonId]
@@ -10,7 +11,7 @@ public class User : IValidatableObject
     // For validation
     [EmailAddress(ErrorMessage = "Invalid email address format.")]
     public string Email { get; set; }
-    public string Password { get; set; }
+    public string? PasswordHash { get; set; }
 
     // To manage if the user has granted access to their allergies to anyone. The string is the token that allow viewers.
     public string? ShareToken { get; set; }
@@ -19,11 +20,11 @@ public class User : IValidatableObject
     public List<string>? Allergies { get; set; }
 
 
-    public User(string email, string password)
+    public User(string email, string passwordHash)
     {
         Id = ObjectId.GenerateNewId();
         Email = email;
-        Password = password;
+        PasswordHash = passwordHash;
     }
 
 
@@ -37,9 +38,9 @@ public class User : IValidatableObject
         {
             yield return new ValidationResult("Email is required.", new[] { nameof(Email) });
         }
-        if (string.IsNullOrWhiteSpace(Password))
+        if (string.IsNullOrWhiteSpace(PasswordHash))
         {
-            yield return new ValidationResult("Password is required.", new[] { nameof(Password) });
+            yield return new ValidationResult("PasswordHash is required.", new[] { nameof(PasswordHash) });
         }
     }
 }
