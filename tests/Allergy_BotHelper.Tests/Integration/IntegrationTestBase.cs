@@ -9,12 +9,15 @@ namespace Allergy_BotHelper.Tests.Integration;
 public abstract class IntegrationTestBase : IAsyncLifetime
 {
     private const string UsersCollectionName = "Users";
+    private const string SessionsCollectionName = "Sessions";
     private readonly bool _enabled;
 
     protected MongoDbContext Context { get; } = null!;
     protected UserRepository Repository { get; } = null!;
     protected AuthService Auth { get; } = null!;
     protected IMongoCollection<User> Users { get; } = null!;
+    protected IMongoCollection<ChatSession> Sessions { get; } = null!;
+    protected MongoSessionStore SessionStore { get; } = null!;
 
     protected IntegrationTestBase()
     {
@@ -36,6 +39,8 @@ public abstract class IntegrationTestBase : IAsyncLifetime
         Repository = new UserRepository(Context);
         Auth = new AuthService(Repository);
         Users = Context.GetCollection<User>(UsersCollectionName);
+        Sessions = Context.GetCollection<ChatSession>(SessionsCollectionName);
+        SessionStore = new MongoSessionStore(Context);
     }
 
     public virtual async Task InitializeAsync()
@@ -48,6 +53,7 @@ public abstract class IntegrationTestBase : IAsyncLifetime
         // Clean slate before index creation: leftover documents from a previous
         // crashed run would otherwise break the unique email index creation.
         await Users.DeleteManyAsync(FilterDefinition<User>.Empty);
+        await Sessions.DeleteManyAsync(FilterDefinition<ChatSession>.Empty);
         await Context.EnsureIndexesAsync();
     }
 
@@ -59,5 +65,6 @@ public abstract class IntegrationTestBase : IAsyncLifetime
         }
 
         await Users.DeleteManyAsync(FilterDefinition<User>.Empty);
+        await Sessions.DeleteManyAsync(FilterDefinition<ChatSession>.Empty);
     }
 }

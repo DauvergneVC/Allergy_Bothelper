@@ -33,6 +33,16 @@ public class MongoDbContext
                 new CreateIndexOptions { Unique = false }
             )
         );
+
+        // Soft 1-hour idle bound on bot sessions. Mongo's TTL sweep runs roughly every 60s,
+        // so expiry is approximate; touching UpdatedAt on every save keeps active chats alive.
+        var sessionsCollection = _database.GetCollection<ChatSession>("Sessions");
+        await sessionsCollection.Indexes.CreateOneAsync(
+            new CreateIndexModel<ChatSession>(
+                Builders<ChatSession>.IndexKeys.Ascending(s => s.UpdatedAt),
+                new CreateIndexOptions { ExpireAfter = TimeSpan.FromHours(1) }
+            )
+        );
     }
 
     public async Task PingAsync()
