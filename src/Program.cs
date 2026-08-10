@@ -1,79 +1,61 @@
-﻿using Telegram.Bot;
-using Telegram.Bot.Polling;
-using Telegram.Bot.Types;
-using Telegram.Bot.Types.Enums;
-using Telegram.Bot.Types.ReplyMarkups;
-
-
-// Load environment variables from .env file an initialize MongoDB context
-DotNetEnv.Env.Load();
-string? telegramApiKey = Environment.GetEnvironmentVariable("TELEGRAM_API_KEY");
-string? whatsappApiKey = Environment.GetEnvironmentVariable("WHATSAPP_API_KEY");
-try
+﻿
+namespace Allergy_BotHelper.src
 {
-    string mongoUri = Environment.GetEnvironmentVariable("MONGO_URI") ?? throw new InvalidOperationException("MONGO_URI is not set in the environment variables.");
-    string mongoDatabaseName = Environment.GetEnvironmentVariable("MONGO_INITDB_DATABASE") ?? throw new InvalidOperationException("MONGO_INITDB_DATABASE is not set in the environment variables.");
-
-    // Initialize MongoDB context
-    var mongoDbContext = new MongoDbContext(mongoUri, mongoDatabaseName);
-    await mongoDbContext.PingAsync();
-
-    // Ensure indexes are created
-    await mongoDbContext.EnsureIndexesAsync();
-}
-catch (Exception ex)
-{
-    Console.WriteLine($"Failed to connect to MongoDB: {ex.Message}");
-    return; // Exit the application if the database connection fails
-}
-
-
-
-// Telegram
-using var cts = new CancellationTokenSource();
-var bot = new TelegramBotClient(telegramApiKey, cancellationToken: cts.Token);
-var me = await bot.GetMe();
-bot.OnError += OnError;
-bot.OnMessage += OnMessage;
-bot.OnUpdate += OnUpdate;
-
-Console.WriteLine($"@{me.Username} is running... Press Enter to terminate");
-Console.ReadLine();
-cts.Cancel(); // stop the bot
-
-// method to handle errors in polling or in your OnMessage/OnUpdate code
-async Task OnError(Exception exception, HandleErrorSource source)
-{
-    Console.WriteLine(exception); // just dump the exception to the console
-}
-
-// method that handle messages received by the bot:
-async Task OnMessage(Message msg, UpdateType type)
-{
-    if (msg.Text == "/start")
+    class Program
     {
-        await bot.SendMessage(msg.Chat, "Welcome! Please sign in to your account or create a new one.",
-        replyMarkup: new InlineKeyboardButton[] { "Sign In", "Create Account" });
-    }
-}
+        static async Task Main(string[] args)
+        {
+            // Load environment variables from .env file and retrieve API keys
+            DotNetEnv.Env.Load();
+            string? telegramApiKey = Environment.GetEnvironmentVariable("TELEGRAM_API_KEY");
+            string? whatsappApiKey = Environment.GetEnvironmentVariable("WHATSAPP_API_KEY");
 
-// method that handle other types of updates received by the bot:
-async Task OnUpdate(Update update)
-{
-    if (update is { CallbackQuery: { } query }) // non-null CallbackQuery
-    {
-        await bot.AnswerCallbackQuery(query.Id, $"You picked {query.Data}"); // mesage that appears like a pop-up when the user clicks on a button
-        if (query.Data == "Sign In")
-        {
-            await bot.SendMessage(query.Message!.Chat, "Please enter your email and password to sign in.");
-        }
-        else if (query.Data == "Create Account")
-        {
-            await bot.SendMessage(query.Message!.Chat, "Please enter your email, password, and allergies to create a new account.");
-        }
-        else
-        {
-            await bot.SendMessage(query.Message!.Chat, $"You clicked on {query.Data}");
+            // MongoDB
+            MongoDbContext mongoDbContext;
+            try
+            {
+                string mongoUri = Environment.GetEnvironmentVariable("MONGO_URI") ??
+                    throw new InvalidOperationException("MONGO_URI is not set in the environment variables.");
+                string mongoDatabaseName = Environment.GetEnvironmentVariable("MONGO_INITDB_DATABASE") ??
+                    throw new InvalidOperationException("MONGO_INITDB_DATABASE is not set in the environment variables.");
+
+                mongoDbContext = new MongoDbContext(mongoUri, mongoDatabaseName);
+                await mongoDbContext.PingAsync();
+                // Ensure indexes are created
+                await mongoDbContext.EnsureIndexesAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to connect to MongoDB: {ex.Message}");
+                return; // Exit the application if the database connection fails
+            }
+
+            // Initialize services with DB context loaded
+            UserRepository userRepository = new(mongoDbContext);
+            AuthService authService = new(userRepository);
+            AllergyService allergyService = new(userRepository);
+            ShareService shareService = new(userRepository);
+
+            // Initialize Bot.
+            if (string.IsNullOrEmpty(telegramApiKey) && string.IsNullOrEmpty(whatsappApiKey))
+            {
+                Console.WriteLine("No API keys has been set. One or more API keys are not set in the environment variables.");
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(whatsappApiKey))
+            {
+                Console.WriteLine("WhatsApp API key is set. WhatsApp bot functionality will be enabled.");
+                Console.WriteLine("NOT IMPLEMENTED YET");
+            }
+            if (!string.IsNullOrEmpty(telegramApiKey))
+            {
+                Console.WriteLine("Telegram API key is set. Telegram bot functionality will be enabled.");
+                await new TelegramChannel(telegramApiKey!, CancellationToken.None).StartAsync(CancellationToken.None);
+
+            }
+
+
         }
     }
 }

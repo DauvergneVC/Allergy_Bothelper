@@ -13,23 +13,19 @@ public class User : IValidatableObject
     public string Password { get; set; }
 
     // To manage if the user has granted access to their allergies to anyone. The string is the token that allow viewers.
-    public ShareToken? ShareToken { get; set; }
+    public string? ShareToken { get; set; }
 
     // List of allergies associated with the user
-    public List<string> Allergies { get; set; }
+    public List<string>? Allergies { get; set; }
 
 
-    public User(string email, string password, List<string> allergies)
+    public User(string email, string password)
     {
-        ArgumentNullException.ThrowIfNullOrWhiteSpace(email);
-        ArgumentNullException.ThrowIfNullOrWhiteSpace(password);
-        ArgumentNullException.ThrowIfNull(allergies);
-
         Id = ObjectId.GenerateNewId();
         Email = email;
         Password = password;
-        Allergies = allergies;
     }
+
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
@@ -45,20 +41,5 @@ public class User : IValidatableObject
         {
             yield return new ValidationResult("Password is required.", new[] { nameof(Password) });
         }
-    }
-
-
-    public void GrantAccess()
-    {
-        GenerateShareToken();
-    }
-    public void RevokeAccess()
-    {
-        ShareToken = null;
-    }
-    private void GenerateShareToken()
-    {
-        // Generate a unique token for sharing allergies
-        ShareToken = new ShareToken(Guid.NewGuid().ToString());
     }
 }

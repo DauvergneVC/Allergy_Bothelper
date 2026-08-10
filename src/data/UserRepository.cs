@@ -6,9 +6,9 @@ public class UserRepository : IUserRepository
 {
     private readonly IMongoCollection<User> _usersCollection;
 
-    public UserRepository(IMongoDatabase database)
+    public UserRepository(MongoDbContext _context)
     {
-        _usersCollection = database.GetCollection<User>("Users");
+        _usersCollection = _context.GetCollection<User>("Users");
     }
 
 
@@ -17,11 +17,24 @@ public class UserRepository : IUserRepository
         return await _usersCollection.Find(u => u.Id == userId).FirstOrDefaultAsync();
     }
 
+    public async Task<User?> GetByUserShareTokenAsync(string token)
+    {
+        return await _usersCollection.Find(u => u.ShareToken == token).FirstOrDefaultAsync();
+    }
+
     public async Task<User?> GetUserByEmailAsync(string email)
     {
         return await _usersCollection.Find(u => u.Email == email).FirstOrDefaultAsync();
     }
+    public async Task<string> GenerateTokenAsync(ObjectId user)
+    {
+        throw new NotImplementedException();
+    }
 
+    public async Task RevokeTokenAsync(ObjectId userId)
+    {
+        throw new NotImplementedException();
+    }
 
     // With validations
     public async Task CreateUserAsync(User user)
