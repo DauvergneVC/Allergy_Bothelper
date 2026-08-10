@@ -1,25 +1,37 @@
 ﻿
+using System.Collections;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Telegram.Bot;
+
 namespace Allergy_BotHelper.src
 {
     class Program
     {
         static async Task Main(string[] args)
         {
-            // Load environment variables from .env file and retrieve API keys
-            DotNetEnv.Env.Load();
-            string? telegramApiKey = Environment.GetEnvironmentVariable("TELEGRAM_API_KEY");
-            string? whatsappApiKey = Environment.GetEnvironmentVariable("WHATSAPP_API_KEY");
+            // Load .env without clobbering: process environment wins, the file only fills gaps.
+            DotNetEnv.Env.Load(".env", EnvConfig.NoClobberLoad);
+
+            BotConfig config;
+            try
+            {
+                config = EnvConfig.Resolve(ProcessEnv());
+            }
+            catch (InvalidOperationException ex)
+            {
+                Console.WriteLine(ex.Message);
+                return;
+            }
 
             // MongoDB
             MongoDbContext mongoDbContext;
             try
             {
-                string mongoUri = Environment.GetEnvironmentVariable("MONGO_URI") ??
-                    throw new InvalidOperationException("MONGO_URI is not set in the environment variables.");
-                string mongoDatabaseName = Environment.GetEnvironmentVariable("MONGO_INITDB_DATABASE") ??
-                    throw new InvalidOperationException("MONGO_INITDB_DATABASE is not set in the environment variables.");
-
-                mongoDbContext = new MongoDbContext(mongoUri, mongoDatabaseName);
+                mongoDbContext = new MongoDbContext(config.MongoUri, config.MongoDatabase);
                 await mongoDbContext.PingAsync();
                 // Ensure indexes are created
                 await mongoDbContext.EnsureIndexesAsync();
@@ -30,33 +42,59 @@ namespace Allergy_BotHelper.src
                 return; // Exit the application if the database connection fails
             }
 
-            // Initialize services with DB context loaded
-            UserRepository userRepository = new(mongoDbContext);
-            AuthService authService = new(userRepository);
-            AllergyService allergyService = new(userRepository);
-            ShareService shareService = new(userRepository);
-            var botHandler = new BotAuthHandler(authService, shareService);
+            // Webhook host: one POST endpoint receives Telegram updates; the registrar
+            // announces the URL to Telegram at startup. No long polling.
+            var builder = WebApplication.CreateBuilder(args);
+            builder.WebHost.UseUrls($"http://0.0.0.0:{config.Port}");
 
-            // Initialize Bot.
-            if (string.IsNullOrEmpty(telegramApiKey) && string.IsNullOrEmpty(whatsappApiKey))
+            builder.Services.AddSingleton(mongoDbContext);
+            builder.Services.AddSingleton<IUserRepository, UserRepository>();
+            builder.Services.AddSingleton<IAuthService, AuthService>();
+            builder.Services.AddSingleton<IAllergyService, AllergyService>();
+            builder.Services.AddSingleton<IShareService, ShareService>();
+            builder.Services.AddSingleton<ISessionStore, MongoSessionStore>();
+
+            builder.Services.AddSingleton<BotAuthHandler>();
+            builder.Services.AddSingleton<IBotAuthHandler>(sp =>
+                new SessionAwareHandler(
+                    sp.GetRequiredService<BotAuthHandler>(),
+                    sp.GetRequiredService<ISessionStore>()));
+
+            var client = new TelegramBotClient(config.TelegramApiKey);
+            builder.Services.AddSingleton<ITelegramBotClient>(client);
+            builder.Services.AddSingleton<IWebhookRegistrar>(new TelegramWebhookRegistrar(client));
+            builder.Services.AddSingleton<WebhookDispatcher>();
+            builder.Services.AddSingleton(sp => new WebhookRequestHandler(
+                sp.GetRequiredService<WebhookDispatcher>(),
+                config.WebhookSecretToken));
+            builder.Services.AddSingleton(sp => new WebhookRegistrationService(
+                sp.GetRequiredService<IWebhookRegistrar>(),
+                config.WebhookUrl,
+                config.WebhookSecretToken));
+            builder.Services.AddHostedService(sp => sp.GetRequiredService<WebhookRegistrationService>());
+
+            var app = builder.Build();
+
+            app.MapPost("/webhook", async (HttpContext http, WebhookRequestHandler handler) =>
             {
-                Console.WriteLine("No API keys has been set. One or more API keys are not set in the environment variables.");
-                return;
+                var secret = http.Request.Headers["X-Telegram-Bot-Api-Secret-Token"].FirstOrDefault();
+                http.Response.StatusCode = await handler.ProcessAsync(http.Request.Body, secret, http.RequestAborted);
+            });
+
+            app.MapGet("/healthz", () => Results.Ok("ok"));
+
+            await app.RunAsync();
+        }
+
+        private static Dictionary<string, string?> ProcessEnv()
+        {
+            var env = new Dictionary<string, string?>();
+            foreach (DictionaryEntry entry in Environment.GetEnvironmentVariables())
+            {
+                env[(string)entry.Key] = entry.Value?.ToString();
             }
 
-            if (!string.IsNullOrEmpty(whatsappApiKey))
-            {
-                Console.WriteLine("WhatsApp API key is set. WhatsApp bot functionality will be enabled.");
-                Console.WriteLine("NOT IMPLEMENTED YET");
-            }
-            if (!string.IsNullOrEmpty(telegramApiKey))
-            {
-                Console.WriteLine("Telegram API key is set. Telegram bot functionality will be enabled.");
-                await new TelegramChannel(telegramApiKey!, CancellationToken.None, botHandler).StartAsync(CancellationToken.None);
-
-            }
-
-
+            return env;
         }
     }
 }
