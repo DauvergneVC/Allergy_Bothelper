@@ -30,7 +30,9 @@ public class RegisterTests
         var user = await _auth.RegisterAsync("  User@Example.COM  ", "password123");
 
         Assert.Equal("user@example.com", user.Email);
-        Assert.Equal("user@example.com", _fake.GetUserByEmailAsync("user@example.com")?.GetAwaiter().GetResult()?.Email);
+
+        var stored = await _fake.GetUserByEmailAsync("user@example.com");
+        Assert.Equal("user@example.com", stored!.Email);
     }
 
     [Fact]

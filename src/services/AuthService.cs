@@ -82,7 +82,20 @@ public class AuthService : IAuthService
 
     public async Task<User> LoginByTokenAsync(string token)
     {
-        throw new NotImplementedException();
+        // Blank-token guard FIRST: no repository lookup for null/empty/whitespace tokens.
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            throw new AuthException(AuthErrorCode.InvalidToken);
+        }
+
+        // Exact-match indexed lookup: one token authorizes many guests, no fuzzy matching.
+        var user = await _userRepository.GetByUserShareTokenAsync(token);
+        if (user is null)
+        {
+            throw new AuthException(AuthErrorCode.InvalidToken);
+        }
+
+        return user;
     }
 
     private static string NormalizeEmail(string email) => (email ?? string.Empty).Trim().ToLowerInvariant();
