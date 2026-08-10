@@ -1,21 +1,21 @@
-using System.Collections.Concurrent;
 using System.ComponentModel.DataAnnotations;
-
-[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Allergy_BotHelper.Tests")]
 
 public interface IBotAuthHandler
 {
-    Task<BotReply?> HandleAsync(long chatId, string? text, string? callbackData, CancellationToken ct);
+    Task<BotReply?> HandleAsync(long chatId, ChatSession session, string? text, string? callbackData, CancellationToken ct);
 }
 
+/// <summary>
+/// Pure chat-logic handler: mutates the <see cref="ChatSession"/> it is given and returns a
+/// reply. It owns no session storage or locking — the caller (a
+/// <c>SessionAwareHandler</c>) is responsible for loading, persisting and serializing.
+/// </summary>
 public sealed class BotAuthHandler : IBotAuthHandler
 {
     private static readonly EmailAddressAttribute EmailAttribute = new();
 
     private readonly IAuthService _authService;
     private readonly IShareService _shareService;
-    private readonly ConcurrentDictionary<long, ChatSession> _sessions = new();
-    private readonly ConcurrentDictionary<long, SemaphoreSlim> _gates = new();
 
     public BotAuthHandler(IAuthService authService, IShareService shareService)
     {
@@ -23,25 +23,7 @@ public sealed class BotAuthHandler : IBotAuthHandler
         _shareService = shareService;
     }
 
-    public async Task<BotReply?> HandleAsync(long chatId, string? text, string? callbackData, CancellationToken ct)
-    {
-        var gate = _gates.GetOrAdd(chatId, _ => new SemaphoreSlim(1, 1));
-        await gate.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            var session = _sessions.GetOrAdd(chatId, _ => new ChatSession());
-            return await HandleCoreAsync(session, text, callbackData).ConfigureAwait(false);
-        }
-        finally
-        {
-            gate.Release();
-        }
-    }
-
-    internal ChatSession? GetSession(long chatId)
-        => _sessions.TryGetValue(chatId, out var session) ? session : null;
-
-    private async Task<BotReply?> HandleCoreAsync(ChatSession session, string? text, string? callbackData)
+    public async Task<BotReply?> HandleAsync(long chatId, ChatSession session, string? text, string? callbackData, CancellationToken ct)
     {
         if (callbackData is not null)
         {
@@ -53,14 +35,9 @@ public sealed class BotAuthHandler : IBotAuthHandler
             return null;
         }
 
-        if (session.State == SessionState.Idle)
-        {
-            return text.StartsWith('/')
-                ? await HandleIdleCommandAsync(session, text).ConfigureAwait(false)
-                : null;
-        }
-
-        return await HandlePendingInputAsync(session, text).ConfigureAwait(false);
+        return session.State == SessionState.Idle
+            ? await HandleIdleCommandAsync(session, text).ConfigureAwait(false)
+            : await HandlePendingInputAsync(session, text).ConfigureAwait(false);
     }
 
     private static BotReply? HandleCallback(ChatSession session, string callbackData)

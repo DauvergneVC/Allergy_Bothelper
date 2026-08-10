@@ -37,7 +37,7 @@ public class TelegramChannel
     // method that handle messages received by the bot:
     private async Task OnMessage(Message msg, UpdateType type)
     {
-        var reply = await _handler.HandleAsync(msg.Chat.Id, msg.Text, null, CancellationToken.None).ConfigureAwait(false);
+        var reply = await _handler.HandleAsync(msg.Chat.Id, new ChatSession(), msg.Text, null, CancellationToken.None).ConfigureAwait(false);
         if (reply is not null)
         {
             await _bot.SendMessage(msg.Chat, reply.Text, replyMarkup: BuildMarkup(reply.Buttons)).ConfigureAwait(false);
@@ -49,7 +49,7 @@ public class TelegramChannel
         if (update is { CallbackQuery: { } query }) // non-null CallbackQuery
         {
             await _bot.AnswerCallbackQuery(query.Id).ConfigureAwait(false); // required by the Telegram API
-            var reply = await _handler.HandleAsync(query.Message!.Chat.Id, null, query.Data, CancellationToken.None).ConfigureAwait(false);
+            var reply = await _handler.HandleAsync(query.Message!.Chat.Id, new ChatSession(), null, query.Data, CancellationToken.None).ConfigureAwait(false);
             if (reply is not null)
             {
                 await _bot.SendMessage(query.Message.Chat, reply.Text, replyMarkup: BuildMarkup(reply.Buttons)).ConfigureAwait(false);

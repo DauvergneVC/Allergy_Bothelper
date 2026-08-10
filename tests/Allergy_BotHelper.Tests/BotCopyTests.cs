@@ -58,10 +58,11 @@ public class BotCopyTests
         fake.Seed(new User("owner@example.com", BcryptFixtures.Password123Hash));
         var handler = new BotAuthHandler(new AuthService(fake), new ShareService(fake));
         const long chatId = 1;
+        var session = new ChatSession { ChatId = chatId };
 
-        await handler.HandleAsync(chatId, "/login", null, CancellationToken.None);
-        await handler.HandleAsync(chatId, "owner@example.com", null, CancellationToken.None);
-        var reply = await handler.HandleAsync(chatId, "wrong-password", null, CancellationToken.None);
+        await handler.HandleAsync(chatId, session, "/login", null, CancellationToken.None);
+        await handler.HandleAsync(chatId, session, "owner@example.com", null, CancellationToken.None);
+        var reply = await handler.HandleAsync(chatId, session, "wrong-password", null, CancellationToken.None);
 
         Assert.NotNull(reply);
         Assert.Equal(BotCopy.WrongPassword, reply!.Text);
