@@ -1,5 +1,6 @@
 using System.Net;
 using System.Reflection;
+using System.Security.Cryptography;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using MongoDB.Driver.Core.Clusters;
@@ -78,10 +79,33 @@ public class FakeUserRepository : IUserRepository
     }
 
     public Task<string> GenerateTokenAsync(ObjectId user)
-        => throw new NotImplementedException();
+    {
+        var index = _users.FindIndex(u => u.Id == user);
+        if (index < 0)
+        {
+            throw new InvalidOperationException("User not found.");
+        }
+
+        var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
+            .Replace('+', '-')
+            .Replace('/', '_')
+            .TrimEnd('=');
+
+        _users[index].ShareToken = token;
+        return Task.FromResult(token);
+    }
 
     public Task RevokeTokenAsync(ObjectId userId)
-        => throw new NotImplementedException();
+    {
+        var index = _users.FindIndex(u => u.Id == userId);
+        if (index < 0)
+        {
+            throw new InvalidOperationException("User not found.");
+        }
+
+        _users[index].ShareToken = null;
+        return Task.CompletedTask;
+    }
 
     private static MongoWriteException CreateDuplicateKeyException()
     {

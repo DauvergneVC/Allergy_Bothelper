@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Security.Cryptography;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
@@ -28,12 +29,33 @@ public class UserRepository : IUserRepository
     }
     public async Task<string> GenerateTokenAsync(ObjectId user)
     {
-        throw new NotImplementedException();
+        var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
+            .Replace('+', '-')
+            .Replace('/', '_')
+            .TrimEnd('=');
+
+        var result = await _usersCollection.FindOneAndUpdateAsync(
+            Builders<User>.Filter.Eq(u => u.Id, user),
+            Builders<User>.Update.Set(u => u.ShareToken, token));
+
+        if (result is null)
+        {
+            throw new InvalidOperationException("User not found.");
+        }
+
+        return token;
     }
 
     public async Task RevokeTokenAsync(ObjectId userId)
     {
-        throw new NotImplementedException();
+        var result = await _usersCollection.FindOneAndUpdateAsync(
+            Builders<User>.Filter.Eq(u => u.Id, userId),
+            Builders<User>.Update.Set(u => u.ShareToken, null));
+
+        if (result is null)
+        {
+            throw new InvalidOperationException("User not found.");
+        }
     }
 
     // With validations

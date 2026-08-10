@@ -3,5 +3,6 @@ using MongoDB.Bson;
 
 public interface IShareService
 {
-    Task ShareAsync(ObjectId userId);
+    Task<string> GenerateTokenAsync(ObjectId userId);
+    Task RevokeTokenAsync(ObjectId userId);
 }

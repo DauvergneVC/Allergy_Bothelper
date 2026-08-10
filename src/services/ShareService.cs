@@ -3,15 +3,30 @@ using MongoDB.Bson;
 
 public class ShareService : IShareService
 {
-    private readonly UserRepository _userRepository;
+    private readonly IUserRepository _userRepository;
 
-    public ShareService(UserRepository userRepository)
+    public ShareService(IUserRepository userRepository)
     {
         _userRepository = userRepository;
     }
 
-    public async Task ShareAsync(ObjectId userId)
+    public async Task<string> GenerateTokenAsync(ObjectId userId)
     {
-        throw new NotImplementedException();
+        if (await _userRepository.GetUserByIdAsync(userId) is null)
+        {
+            throw new InvalidOperationException("User not found.");
+        }
+
+        return await _userRepository.GenerateTokenAsync(userId);
+    }
+
+    public async Task RevokeTokenAsync(ObjectId userId)
+    {
+        if (await _userRepository.GetUserByIdAsync(userId) is null)
+        {
+            throw new InvalidOperationException("User not found.");
+        }
+
+        await _userRepository.RevokeTokenAsync(userId);
     }
 }
