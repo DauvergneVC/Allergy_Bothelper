@@ -54,7 +54,30 @@ public class AuthService : IAuthService
 
     public async Task<User> LoginAsync(string email, string password)
     {
-        throw new NotImplementedException();
+        email = NormalizeEmail(email);
+        ValidateCredentials(email, password);
+
+        var user = await _userRepository.GetUserByEmailAsync(email);
+        if (user is null)
+        {
+            // Dummy verification keeps the timing comparable with a real lookup+verify.
+            VerifyAgainstDummy(password);
+            throw new AuthException(AuthErrorCode.UnknownEmail);
+        }
+
+        if (string.IsNullOrEmpty(user.PasswordHash))
+        {
+            // Legacy document without a password hash: behave exactly like a wrong password.
+            VerifyAgainstDummy(password);
+            throw new AuthException(AuthErrorCode.WrongPassword);
+        }
+
+        if (!BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
+        {
+            throw new AuthException(AuthErrorCode.WrongPassword);
+        }
+
+        return user;
     }
 
     public async Task<User> LoginByTokenAsync(string token)
