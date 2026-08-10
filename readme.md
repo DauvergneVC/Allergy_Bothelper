@@ -9,6 +9,17 @@ la idea es simplemente utilziar un bot de Whatsapp/Telegram, de momento telegram
 - **C#**: Esta decicion es simplemente por gusto, podria haebr utilizado Python y habria sido mas sencillo, pero tube la necesidad de practicar trabajar con clases y un lenguaje estructurado como C#.
 - **Arquitectura por capas**: me fui por una arquitectura simple, adaptandola para ser bien sencilla dado el caso.
 
+## Arquitectura de despliegue (plan)
+
+- **Cloud Run (GCP), serverless multi-instance**: el bot corre como una imagen de contenedor única; las instancias escalan elásticamente y no tienen almacenamiento local persistente. El `docker-compose` local queda solo para desarrollo (MongoDB); Cloud Run no ejecuta compose.
+- **Telegram por webhook**: en vez de long-polling, el bot expone un endpoint HTTPS que recibe los updates. Implica validar el secreto del webhook y responder rápido; los cold starts se absorben con `min-instances=1`.
+- **Sesiones por chat en MongoDB**: los flujos conversacionales se persisten por `chatId` con TTL, para que un update pueda caer en cualquier instancia sin perder el paso actual. Hoy están en memoria y se pierden al reiniciar; este cambio es requisito del multi-instance.
+- **MongoDB en producción**: Atlas free tier (M0); el driver `MongoDB.Driver` no cambia.
+- **Configuración**: env vars / Secret Manager en producción; `.env` solo local.
+- **OCR**: Google Vision API (cuota gratuita) — sin sidecar Python en Cloud Run.
+- **Traducción ES↔EN**: Google Cloud Translation API como fallback del matcher de alergias — sin Argos local.
+- **Empaquetado**: Dockerfile multi-stage (.NET 10 SDK → runtime), la app escucha en `$PORT`, usuario no-root.
+
 ## Bot commands
 
 The implemented surface is conversational authentication. Each command walks you through a step-by-step flow, and `/start` shows a menu with buttons.
@@ -37,7 +48,7 @@ Only the owner can generate or revoke tokens; guests log in read-only with a tok
 
 ### Session and storage
 
-- Chat sessions are **in-memory only** and reset on restart: active login, role, and current step are lost.
+- Chat sessions are **in-memory only** and reset on restart: active login, role, and current step are lost. (Target: persisted in MongoDB with TTL so flows survive across Cloud Run instances — see Deployment architecture.)
 - Share tokens persist in MongoDB until they are revoked or regenerated.
 
 ### Allergy management
