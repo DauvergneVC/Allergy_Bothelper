@@ -9,22 +9,44 @@ la idea es simplemente utilziar un bot de Whatsapp/Telegram, de momento telegram
 - **C#**: Esta decicion es simplemente por gusto, podria haebr utilizado Python y habria sido mas sencillo, pero tube la necesidad de practicar trabajar con clases y un lenguaje estructurado como C#.
 - **Arquitectura por capas**: me fui por una arquitectura simple, adaptandola para ser bien sencilla dado el caso.
 
-## Comandos y funcionamiento del bot
+## Bot commands
 
-- /login y /register -> Inicio principal, dependiendo de si se utiliza un token (en login) o correo y contraseña, se determinara si es el ownser o un añadido para poder hacer consultas. Solo el owner tendra privilegios para editar las alergias.
+The implemented surface is conversational authentication. Each command walks you through a step-by-step flow, and `/start` shows a menu with buttons.
 
-- /compartir -> Genera una clave o token para que las personas puedan ingresar solo en modo read-only con esa clave.
-- /revocar -> Elimina la clave o token.
+### Start
 
-La idea es que estos 2 funcionen en conjunto y solo pueda acceder el owner.
+- `/start` — shows the main menu with **Login** and **Register** buttons.
+
+### Authentication
+
+- `/login` — owner login (email + password) or guest login (share token).
+  1. Enter your email or a share token.
+  2. If you entered an email, enter your password to finish.
+- `/register` — creates a new owner account.
+  1. Enter a new email.
+  2. Enter a password to finish.
+- `/logout` — clears the session for this chat.
+- `/cancel` — aborts the current step and returns to the idle menu.
+
+### Token sharing (owner only)
+
+- `/share` — generates a new share token. Anyone holding it can log in as a guest and view the owner's allergies read-only. A new token invalidates the previous one.
+- `/revoke` — revokes the current token, so guests can no longer log in with it.
+
+Only the owner can generate or revoke tokens; guests log in read-only with a token.
+
+### Session and storage
+
+- Chat sessions are **in-memory only** and reset on restart: active login, role, and current step are lost.
+- Share tokens persist in MongoDB until they are revoked or regenerated.
+
+### Allergy management
 
 Para manejar las alergias:
 
 - /Add -> Añadir alergia mediante texto, lista o fotografia. Solo owner.
 - /Remove -> Quitar alergia mediante texto o lista. Solo owner.
 - /Listar -> Listar las alergias. Usable por cualquiera.
-
-El resto del bot (sin comandos), funcionara sin necesidad de comandos, asumiendo solo lectura. La primera vez que se inicie pedira el login o register de forma obligatoria.
 
 ## Estructura
 

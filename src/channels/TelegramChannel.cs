@@ -6,13 +6,13 @@ using Telegram.Bot.Types.ReplyMarkups;
 
 public class TelegramChannel
 {
-    private readonly string _telegramApiKey;
     private readonly TelegramBotClient _bot;
+    private readonly IBotAuthHandler _handler;
 
-    public TelegramChannel(string telegramApiKey, CancellationToken cancellationToken)
+    public TelegramChannel(string telegramApiKey, CancellationToken cancellationToken, IBotAuthHandler handler)
     {
-        _telegramApiKey = telegramApiKey;
-        _bot = new TelegramBotClient(_telegramApiKey, cancellationToken: cancellationToken);
+        _handler = handler;
+        _bot = new TelegramBotClient(telegramApiKey, cancellationToken: cancellationToken);
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)
@@ -37,37 +37,34 @@ public class TelegramChannel
     // method that handle messages received by the bot:
     private async Task OnMessage(Message msg, UpdateType type)
     {
-        if (msg.Text == "/start")
+        var reply = await _handler.HandleAsync(msg.Chat.Id, msg.Text, null, CancellationToken.None).ConfigureAwait(false);
+        if (reply is not null)
         {
-            // Handle the /start command
-            await _bot.SendMessage(msg.Chat, "Welcome! Please choose an option:",
-            replyMarkup: new InlineKeyboardButton[] { "Sign In", "Create Account" });
-
-        }
-        else
-        {
-            // Handle other messages
-            await _bot.SendMessage(msg.Chat, "I didn't understand that command.");
+            await _bot.SendMessage(msg.Chat, reply.Text, replyMarkup: BuildMarkup(reply.Buttons)).ConfigureAwait(false);
         }
     }
 
-    async Task OnUpdate(Update update)
+    private async Task OnUpdate(Update update)
     {
         if (update is { CallbackQuery: { } query }) // non-null CallbackQuery
         {
-            await _bot.AnswerCallbackQuery(query.Id, $"You picked {query.Data}"); // mesage that appears like a pop-up when the user clicks on a button
-            if (query.Data == "Sign In")
+            await _bot.AnswerCallbackQuery(query.Id).ConfigureAwait(false); // required by the Telegram API
+            var reply = await _handler.HandleAsync(query.Message!.Chat.Id, null, query.Data, CancellationToken.None).ConfigureAwait(false);
+            if (reply is not null)
             {
-                await _bot.SendMessage(query.Message!.Chat, "Please enter your email and password to sign in.");
-            }
-            else if (query.Data == "Create Account")
-            {
-                await _bot.SendMessage(query.Message!.Chat, "Please enter your email, password, and allergies to create a new account.");
-            }
-            else
-            {
-                await _bot.SendMessage(query.Message!.Chat, $"You clicked on {query.Data}");
+                await _bot.SendMessage(query.Message.Chat, reply.Text, replyMarkup: BuildMarkup(reply.Buttons)).ConfigureAwait(false);
             }
         }
+    }
+
+    private static InlineKeyboardMarkup? BuildMarkup(IReadOnlyList<BotButton>? buttons)
+    {
+        if (buttons is null || buttons.Count == 0)
+        {
+            return null;
+        }
+
+        var rows = buttons.Select(b => new[] { InlineKeyboardButton.WithCallbackData(b.Text, b.CallbackValue) });
+        return new InlineKeyboardMarkup(rows);
     }
 }

@@ -35,6 +35,7 @@ namespace Allergy_BotHelper.src
             AuthService authService = new(userRepository);
             AllergyService allergyService = new(userRepository);
             ShareService shareService = new(userRepository);
+            var botHandler = new BotAuthHandler(authService, shareService);
 
             // Initialize Bot.
             if (string.IsNullOrEmpty(telegramApiKey) && string.IsNullOrEmpty(whatsappApiKey))
@@ -51,7 +52,7 @@ namespace Allergy_BotHelper.src
             if (!string.IsNullOrEmpty(telegramApiKey))
             {
                 Console.WriteLine("Telegram API key is set. Telegram bot functionality will be enabled.");
-                await new TelegramChannel(telegramApiKey!, CancellationToken.None).StartAsync(CancellationToken.None);
+                await new TelegramChannel(telegramApiKey!, CancellationToken.None, botHandler).StartAsync(CancellationToken.None);
 
             }
 
