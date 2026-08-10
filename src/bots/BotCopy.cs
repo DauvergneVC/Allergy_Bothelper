@@ -26,6 +26,7 @@ public static class BotCopy
     public const string WrongPassword = "Incorrect password.";
     public const string InvalidToken = "That token is invalid or expired.";
     public const string InvalidInput = "Please provide a valid email and password.";
+    public const string HelpCommands = "Available commands:\n/login — log in as the owner\n/register — create an owner account\n/share — generate a new guest token (owner only)\n/revoke — delete the guest token (owner only)\n/logout — clear this chat's session\n/cancel — cancel the current step\n/help — show this list";
 
     public static string ForAuthError(AuthErrorCode code) => code switch
     {

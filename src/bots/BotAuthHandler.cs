@@ -103,6 +103,8 @@ public sealed class BotAuthHandler : IBotAuthHandler
                 return HandleLogout(session);
             case "/cancel":
                 return new BotReply(BotCopy.NothingToCancel);
+            case "/help":
+                return new BotReply(BotCopy.HelpCommands);
             default:
                 return new BotReply(BotCopy.UnknownCommand);
         }
@@ -152,6 +154,8 @@ public sealed class BotAuthHandler : IBotAuthHandler
             case "/revoke":
             case "/logout":
                 return new BotReply(BotCopy.StepInProgress);
+            case "/help":
+                return new BotReply(BotCopy.HelpCommands);
             default:
                 return new BotReply(BotCopy.UnknownCommand);
         }
@@ -178,7 +182,7 @@ public sealed class BotAuthHandler : IBotAuthHandler
             session.Role = ChatRole.Owner;
             session.UserId = user.Id;
             session.PendingEmail = null;
-            return new BotReply(BotCopy.RegisterSuccess);
+            return new BotReply(BotCopy.RegisterSuccess + "\n\n" + BotCopy.HelpCommands);
         }
         catch (AuthException ex)
         {
@@ -217,7 +221,7 @@ public sealed class BotAuthHandler : IBotAuthHandler
             session.UserId = user.Id;
             session.GuestToken = input;
             session.PendingEmail = null;
-            return new BotReply(BotCopy.LoginGuestSuccess);
+            return new BotReply(BotCopy.LoginGuestSuccess + "\n\n" + BotCopy.HelpCommands);
         }
         catch (AuthException ex)
         {
@@ -235,7 +239,7 @@ public sealed class BotAuthHandler : IBotAuthHandler
             session.UserId = user.Id;
             session.GuestToken = null;
             session.PendingEmail = null;
-            return new BotReply(BotCopy.LoginOwnerSuccess);
+            return new BotReply(BotCopy.LoginOwnerSuccess + "\n\n" + BotCopy.HelpCommands);
         }
         catch (AuthException ex)
         {

@@ -116,7 +116,7 @@ public class BotAuthHandlerTests
         Assert.Equal("owner@example.com", session.PendingEmail);
 
         var third = await handler.HandleAsync(ChatA, "  spaced  ", null, CancellationToken.None);
-        Assert.Equal(BotCopy.RegisterSuccess, third!.Text);
+        Assert.Equal(BotCopy.RegisterSuccess + "\n\n" + BotCopy.HelpCommands, third!.Text);
 
         Assert.Equal(SessionState.Idle, session.State);
         Assert.Equal(ChatRole.Owner, session.Role);
@@ -174,7 +174,7 @@ public class BotAuthHandlerTests
         await handler.HandleAsync(ChatA, "owner@example.com", null, CancellationToken.None);
         var reply = await handler.HandleAsync(ChatA, "password123", null, CancellationToken.None);
 
-        Assert.Equal(BotCopy.LoginOwnerSuccess, reply!.Text);
+        Assert.Equal(BotCopy.LoginOwnerSuccess + "\n\n" + BotCopy.HelpCommands, reply!.Text);
         var session = handler.GetSession(ChatA)!;
         Assert.Equal(SessionState.Idle, session.State);
         Assert.Equal(ChatRole.Owner, session.Role);
@@ -212,7 +212,7 @@ public class BotAuthHandlerTests
         await handler.HandleAsync(ChatA, "/login", null, CancellationToken.None);
         var reply = await handler.HandleAsync(ChatA, "SHARED-TOKEN-1", null, CancellationToken.None);
 
-        Assert.Equal(BotCopy.LoginGuestSuccess, reply!.Text);
+        Assert.Equal(BotCopy.LoginGuestSuccess + "\n\n" + BotCopy.HelpCommands, reply!.Text);
         var session = handler.GetSession(ChatA)!;
         Assert.Equal(SessionState.Idle, session.State);
         Assert.Equal(ChatRole.Guest, session.Role);
@@ -420,6 +420,95 @@ public class BotAuthHandlerTests
 
         Assert.Equal(BotCopy.StepInProgress, reply!.Text);
         Assert.Equal(SessionState.AwaitingLoginEmail, handler.GetSession(ChatA)!.State);
+    }
+
+    [Fact]
+    public async Task Help_WhileIdle_RepliesCommandList_StaysIdle()
+    {
+        var (handler, _, _, _) = Create();
+
+        var reply = await handler.HandleAsync(ChatA, "/help", null, CancellationToken.None);
+
+        Assert.Equal(BotCopy.HelpCommands, reply!.Text);
+        var session = handler.GetSession(ChatA)!;
+        Assert.Equal(SessionState.Idle, session.State);
+        Assert.Equal(ChatRole.None, session.Role);
+    }
+
+    [Fact]
+    public async Task Help_WhileRegisterPending_RepliesList_WithoutAbortingFlow()
+    {
+        var (handler, _, _, _) = Create();
+        await handler.HandleAsync(ChatA, "/register", null, CancellationToken.None);
+        await handler.HandleAsync(ChatA, "owner@example.com", null, CancellationToken.None);
+        var before = handler.GetSession(ChatA)!;
+        Assert.Equal(SessionState.AwaitingRegisterPassword, before.State);
+        Assert.Equal("owner@example.com", before.PendingEmail);
+
+        var reply = await handler.HandleAsync(ChatA, "/help", null, CancellationToken.None);
+
+        Assert.Equal(BotCopy.HelpCommands, reply!.Text);
+        var after = handler.GetSession(ChatA)!;
+        Assert.Equal(SessionState.AwaitingRegisterPassword, after.State);
+        Assert.Equal("owner@example.com", after.PendingEmail);
+    }
+
+    [Fact]
+    public async Task Help_WhileLoginPending_RepliesList_WithoutAbortingFlow()
+    {
+        var (handler, _, _, _) = Create();
+        await handler.HandleAsync(ChatA, "/login", null, CancellationToken.None);
+        await handler.HandleAsync(ChatA, "owner@example.com", null, CancellationToken.None);
+        var before = handler.GetSession(ChatA)!;
+        Assert.Equal(SessionState.AwaitingLoginPassword, before.State);
+        Assert.Equal("owner@example.com", before.PendingEmail);
+
+        var reply = await handler.HandleAsync(ChatA, "/help", null, CancellationToken.None);
+
+        Assert.Equal(BotCopy.HelpCommands, reply!.Text);
+        var after = handler.GetSession(ChatA)!;
+        Assert.Equal(SessionState.AwaitingLoginPassword, after.State);
+        Assert.Equal("owner@example.com", after.PendingEmail);
+    }
+
+    [Fact]
+    public async Task Register_Success_ReplyIncludesHelpCommands()
+    {
+        var (handler, _, _, _) = Create();
+        await handler.HandleAsync(ChatA, "/register", null, CancellationToken.None);
+        await handler.HandleAsync(ChatA, "owner@example.com", null, CancellationToken.None);
+
+        var reply = await handler.HandleAsync(ChatA, "password123", null, CancellationToken.None);
+
+        Assert.StartsWith(BotCopy.RegisterSuccess, reply!.Text);
+        Assert.Contains(BotCopy.HelpCommands, reply.Text);
+    }
+
+    [Fact]
+    public async Task Login_OwnerSuccess_ReplyIncludesHelpCommands()
+    {
+        var (handler, fake, _, _) = Create();
+        fake.Seed(new User("owner@example.com", BcryptFixtures.Password123Hash));
+        await handler.HandleAsync(ChatA, "/login", null, CancellationToken.None);
+        await handler.HandleAsync(ChatA, "owner@example.com", null, CancellationToken.None);
+
+        var reply = await handler.HandleAsync(ChatA, "password123", null, CancellationToken.None);
+
+        Assert.StartsWith(BotCopy.LoginOwnerSuccess, reply!.Text);
+        Assert.Contains(BotCopy.HelpCommands, reply.Text);
+    }
+
+    [Fact]
+    public async Task Login_GuestTokenSuccess_ReplyIncludesHelpCommands()
+    {
+        var (handler, fake, _, _) = Create();
+        fake.Seed(new User("owner@example.com", BcryptFixtures.Password123Hash) { ShareToken = "SHARED-TOKEN-1" });
+        await handler.HandleAsync(ChatA, "/login", null, CancellationToken.None);
+
+        var reply = await handler.HandleAsync(ChatA, "SHARED-TOKEN-1", null, CancellationToken.None);
+
+        Assert.StartsWith(BotCopy.LoginGuestSuccess, reply!.Text);
+        Assert.Contains(BotCopy.HelpCommands, reply.Text);
     }
 
     [Fact]

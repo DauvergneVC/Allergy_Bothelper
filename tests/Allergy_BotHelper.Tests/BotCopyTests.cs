@@ -26,6 +26,19 @@ public class BotCopyTests
             message);
     }
 
+    [Theory]
+    [InlineData("/login")]
+    [InlineData("/register")]
+    [InlineData("/share")]
+    [InlineData("/revoke")]
+    [InlineData("/logout")]
+    [InlineData("/cancel")]
+    [InlineData("/help")]
+    public void HelpCommands_ListsEveryCommand(string command)
+    {
+        Assert.Contains(command, BotCopy.HelpCommands);
+    }
+
     [Fact]
     public async Task AuthFailureThroughHandler_RepliesPinnedEnglish_WithNoSpanishLeak()
     {
