@@ -16,11 +16,13 @@ public sealed class BotAuthHandler : IBotAuthHandler
 
     private readonly IAuthService _authService;
     private readonly IShareService _shareService;
+    private readonly IAllergyService _allergyService;
 
-    public BotAuthHandler(IAuthService authService, IShareService shareService)
+    public BotAuthHandler(IAuthService authService, IShareService shareService, IAllergyService allergyService)
     {
         _authService = authService;
         _shareService = shareService;
+        _allergyService = allergyService;
     }
 
     public async Task<BotReply?> HandleAsync(long chatId, ChatSession session, string? text, string? callbackData, CancellationToken ct)
@@ -62,6 +64,11 @@ public sealed class BotAuthHandler : IBotAuthHandler
 
     private async Task<BotReply> HandleIdleCommandAsync(ChatSession session, string command)
     {
+        if (IsAddCommand(command))
+        {
+            return await HandleAddAsync(session, command).ConfigureAwait(false);
+        }
+
         switch (command)
         {
             case "/start":
@@ -85,6 +92,77 @@ public sealed class BotAuthHandler : IBotAuthHandler
             default:
                 return new BotReply(BotCopy.UnknownCommand);
         }
+    }
+
+    /// <summary>
+    /// ADD-1: the exact lowercase /add command (case-sensitive). Matches "/add" and
+    /// "/add ..." only — "/Add", "/ADD" and "/address" are not the command.
+    /// </summary>
+    private static bool IsAddCommand(string command)
+        => command.StartsWith("/add", StringComparison.Ordinal)
+            && (command.Length == 4 || char.IsWhiteSpace(command[4]));
+
+    private async Task<BotReply> HandleAddAsync(ChatSession session, string command)
+    {
+        var language = ReplyLanguage.Detect(command);
+
+        var argument = command.Length == 4 ? string.Empty : command[4..].Trim();
+        if (argument.Length == 0)
+        {
+            // ADD-7: bare /add (no content, no photo) → usage, nothing persisted.
+            return new BotReply(BotCopy.ForLanguage(language, BotCopy.AllergyUsageEn, BotCopy.AllergyUsageEs));
+        }
+
+        // ADD-8: three-way role gating. Nothing persists for None or Guest.
+        if (session.Role == ChatRole.None)
+        {
+            return new BotReply(BotCopy.ForLanguage(language, BotCopy.AllergyLoginPromptEn, BotCopy.AllergyLoginPromptEs));
+        }
+
+        if (session.Role == ChatRole.Guest)
+        {
+            return new BotReply(BotCopy.ForLanguage(language, BotCopy.AllergyOwnerOnlyEn, BotCopy.AllergyOwnerOnlyEs));
+        }
+
+        if (session.UserId is not { } userId)
+        {
+            return new BotReply(BotCopy.ForLanguage(language, BotCopy.AllergyLoginPromptEn, BotCopy.AllergyLoginPromptEs));
+        }
+
+        var items = IngredientParser.SplitItems(argument);
+        if (items.Count == 0)
+        {
+            return new BotReply(BotCopy.ForLanguage(language, BotCopy.AllergyUsageEn, BotCopy.AllergyUsageEs));
+        }
+
+        var added = new List<string>();
+        var duplicates = new List<string>();
+        foreach (var item in items)
+        {
+            var canonical = Vocabulary.Canonicalize(item);
+            var stored = await _allergyService.AddAsync(userId, canonical, item).ConfigureAwait(false);
+            (stored ? added : duplicates).Add(item);
+        }
+
+        return BuildAddEcho(language, added, duplicates);
+    }
+
+    private static BotReply BuildAddEcho(ReplyLanguageValue language, IReadOnlyList<string> added, IReadOnlyList<string> duplicates)
+    {
+        var lines = new List<string>();
+        if (added.Count > 0)
+        {
+            lines.Add(string.Format(
+                BotCopy.ForLanguage(language, BotCopy.AllergyAddedEn, BotCopy.AllergyAddedEs),
+                string.Join(", ", added)));
+        }
+        if (duplicates.Count > 0)
+        {
+            lines.Add(string.Format(
+                BotCopy.ForLanguage(language, BotCopy.AllergyAlreadyStoredEn, BotCopy.AllergyAlreadyStoredEs),
+                string.Join(", ", duplicates)));
+        }
+        return new BotReply(string.Join("\n", lines));
     }
 
     private async Task<BotReply> HandlePendingInputAsync(ChatSession session, string input)

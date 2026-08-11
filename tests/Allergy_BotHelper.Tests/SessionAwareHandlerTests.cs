@@ -12,7 +12,7 @@ public class SessionAwareHandlerTests
     {
         var fake = new FakeUserRepository();
         fake.Seed(new User("owner@example.com", BcryptFixtures.Password123Hash));
-        var inner = new BotAuthHandler(new AuthService(fake), new ShareService(fake));
+        var inner = new BotAuthHandler(new AuthService(fake), new ShareService(fake), new AllergyService(fake));
         var store = new FakeSessionStore();
         return (new SessionAwareHandler(inner, store), store);
     }
@@ -88,7 +88,7 @@ public class SessionAwareHandlerTests
         // Second handler instance over the same store sees the persisted owner session.
         var fake = new FakeUserRepository();
         fake.Seed(new User("owner@example.com", BcryptFixtures.Password123Hash));
-        var inner = new BotAuthHandler(new AuthService(fake), new ShareService(fake));
+        var inner = new BotAuthHandler(new AuthService(fake), new ShareService(fake), new AllergyService(fake));
         var second = new SessionAwareHandler(inner, store);
 
         var reply = await second.HandleAsync(ChatA, new ChatSession(), "/help", null, CancellationToken.None);
@@ -178,7 +178,7 @@ public class SessionAwareHandlerTests
     {
         var fake = new FakeUserRepository();
         fake.Seed(new User("owner@example.com", BcryptFixtures.Password123Hash) { ShareToken = "GUEST-TOKEN" });
-        var inner = new BotAuthHandler(new AuthService(fake), new ShareService(fake));
+        var inner = new BotAuthHandler(new AuthService(fake), new ShareService(fake), new AllergyService(fake));
         var store = new FakeSessionStore();
         var handler = new SessionAwareHandler(inner, store);
 
@@ -212,7 +212,7 @@ public class SessionAwareHandlerTests
         var fake = new FakeUserRepository();
         var auth = new AuthService(fake);
         await auth.RegisterAsync("owner@example.com", "password123");
-        var inner = new BotAuthHandler(auth, new ShareService(fake));
+        var inner = new BotAuthHandler(auth, new ShareService(fake), new AllergyService(fake));
         var store = new FakeSessionStore();
         var handler = new SessionAwareHandler(inner, store);
 

@@ -16,8 +16,11 @@ public class User : IValidatableObject
     // To manage if the user has granted access to their allergies to anyone. The string is the token that allow viewers.
     public string? ShareToken { get; set; }
 
-    // List of allergies associated with the user
+    // List of allergies associated with the user, stored as canonical EN keys.
     public List<string>? Allergies { get; set; }
+
+    // Raw user-entered labels, index-aligned with Allergies (additive, no migration).
+    public List<string>? AllergyDisplay { get; set; }
 
 
     public User(string email, string passwordHash)

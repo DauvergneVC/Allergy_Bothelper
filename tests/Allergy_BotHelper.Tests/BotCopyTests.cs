@@ -56,7 +56,7 @@ public class BotCopyTests
     {
         var fake = new FakeUserRepository();
         fake.Seed(new User("owner@example.com", BcryptFixtures.Password123Hash));
-        var handler = new BotAuthHandler(new AuthService(fake), new ShareService(fake));
+        var handler = new BotAuthHandler(new AuthService(fake), new ShareService(fake), new AllergyService(fake));
         const long chatId = 1;
         var session = new ChatSession { ChatId = chatId };
 
@@ -72,5 +72,46 @@ public class BotCopyTests
         {
             Assert.DoesNotContain(fragment, reply.Text, StringComparison.OrdinalIgnoreCase);
         }
+    }
+
+    [Theory]
+    [InlineData(ReplyLanguageValue.En)]
+    [InlineData(ReplyLanguageValue.Es)]
+    public void ForLanguage_SelectsTheMatchingLanguageString(ReplyLanguageValue language)
+    {
+        const string en = "english";
+        const string es = "español";
+
+        var selected = BotCopy.ForLanguage(language, en, es);
+
+        Assert.Equal(language == ReplyLanguageValue.En ? en : es, selected);
+    }
+
+    [Theory]
+    [InlineData(BotCopy.AllergyAddedEn, "Added allergies: {0}")]
+    [InlineData(BotCopy.AllergyAddedEs, "Alergias agregadas: {0}")]
+    [InlineData(BotCopy.AllergyAlreadyStoredEn, "Already on your list: {0}")]
+    [InlineData(BotCopy.AllergyAlreadyStoredEs, "Ya estaban en tu lista: {0}")]
+    [InlineData(BotCopy.AllergyUsageEn, "Use /add followed by the allergen or a list, for example:\n/add maní\n/add maní, trigo; avena")]
+    [InlineData(BotCopy.AllergyUsageEs, "Usa /add seguido del alérgeno o una lista, por ejemplo:\n/add maní\n/add maní, trigo; avena")]
+    [InlineData(BotCopy.AllergyOwnerOnlyEn, "Only the owner can add allergies.")]
+    [InlineData(BotCopy.AllergyOwnerOnlyEs, "Solo el dueño puede agregar alergias.")]
+    [InlineData(BotCopy.AllergyLoginPromptEn, "Please log in to add allergies.")]
+    [InlineData(BotCopy.AllergyLoginPromptEs, "Inicia sesión para agregar alergias.")]
+    public void AllergyAddCopy_IsBilingualAndPinned(string actual, string expected)
+    {
+        Assert.Equal(expected, actual);
+    }
+
+    [Theory]
+    [InlineData(BotCopy.IngredientMatchEn, "Allergen detected: {0}")]
+    [InlineData(BotCopy.IngredientMatchEs, "Alérgeno detectado: {0}")]
+    [InlineData(BotCopy.IngredientSafeEn, "No allergen detected.")]
+    [InlineData(BotCopy.IngredientSafeEs, "No se detectaron alérgenos.")]
+    [InlineData(BotCopy.OcrFailureEn, "I couldn't read the photo. Try sending the ingredients as text.")]
+    [InlineData(BotCopy.OcrFailureEs, "No pude leer la foto. Prueba enviar los ingredientes como texto.")]
+    public void IngredientVerdictAndOcrCopy_IsBilingualAndPinned(string actual, string expected)
+    {
+        Assert.Equal(expected, actual);
     }
 }

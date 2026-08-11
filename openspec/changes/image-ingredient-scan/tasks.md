@@ -43,10 +43,10 @@ AuthService, token lifecycle, BotCopy EXCEPT new ES/EN allergy strings, session-
 
 ## Phase 2 — Slice 2: /add text + storage + reply copy
 
-- [ ] 2.1 Enabling fix: `src/services/AllergyService.cs` ctor → `IUserRepository` (latent DI bug); `src/interfaces/IAllergyService.cs` → `AddAsync(userId, canonical, display)` / `GetAllergiesAsync` returns canonical keys; `src/models/User.cs` additive `List<string>? AllergyDisplay` (index-aligned). REQ: ADD-5.
-- [ ] 2.2 Implement `AllergyService`: canonicalize via Vocabulary, dedupe (idempotent; synonym duplicates stored once), persist canonical + display via existing full-doc replace (no migration). MongoFact round-trip both fields + legacy-doc upgrade. REQ: ADD-4, ADD-5, ADD-9.
-- [ ] 2.3 `src/bots/BotCopy.cs`: add ES/EN strings only — add echo, usage, owner-only, log-in prompt, match/safe verdicts, OCR failure. REQ: ADD-6/7/8, CONSULT-6/7.
-- [ ] 2.4 `src/bots/BotAuthHandler.cs` `/add` branch: exact lowercase `/add` (case-sensitive); **ADD-7: bare `/add` (no argument, no photo) → usage instructions reply, nothing persisted**; **ADD-8 three-way role gating: Owner → proceed; Guest → owner-only message; None → log-in prompt**; parse list/single, persist, echo reply. Tests over `FakeUserRepository`. REQ: ADD-1, ADD-2, ADD-6, ADD-7, ADD-8, ADD-9.
+- [x] 2.1 Enabling fix: `src/services/AllergyService.cs` ctor → `IUserRepository` (latent DI bug); `src/interfaces/IAllergyService.cs` → `AddAsync(userId, canonical, display)` / `GetAllergiesAsync` returns canonical keys; `src/models/User.cs` additive `List<string>? AllergyDisplay` (index-aligned). REQ: ADD-5.
+- [x] 2.2 Implement `AllergyService`: canonicalize via Vocabulary, dedupe (idempotent; synonym duplicates stored once), persist canonical + display via existing full-doc replace (no migration). MongoFact round-trip both fields + legacy-doc upgrade. REQ: ADD-4, ADD-5, ADD-9.
+- [x] 2.3 `src/bots/BotCopy.cs`: add ES/EN strings only — add echo, usage, owner-only, log-in prompt, match/safe verdicts, OCR failure. REQ: ADD-6/7/8, CONSULT-6/7.
+- [x] 2.4 `src/bots/BotAuthHandler.cs` `/add` branch: exact lowercase `/add` (case-sensitive); **ADD-7: bare `/add` (no argument, no photo) → usage instructions reply, nothing persisted**; **ADD-8 three-way role gating: Owner → proceed; Guest → owner-only message; None → log-in prompt**; parse list/single, persist, echo reply. Tests over `FakeUserRepository`. REQ: ADD-1, ADD-2, ADD-6, ADD-7, ADD-8, ADD-9.
 
 ## Phase 3 — Slice 3: commandless text consultation
 

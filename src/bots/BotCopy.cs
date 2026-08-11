@@ -29,6 +29,28 @@ public static class BotCopy
     public const string HelpCommands = "Available commands:\n/login — log in as the owner\n/register — create an owner account\n/share — generate a new guest token (owner only)\n/revoke — delete the guest token (owner only)\n/logout — clear this chat's session\n/cancel — cancel the current step\n/help — show this list";
     public const string HelpCommandsLoggedOut = "Available commands:\n/login — log in as the owner\n/register — create an owner account";
 
+    // Bilingual ES/EN copy for the /add and ingredient-consult flows (additive; the
+    // legacy strings above are untouched). Language is picked per reply via ForLanguage.
+    public const string AllergyAddedEn = "Added allergies: {0}";
+    public const string AllergyAddedEs = "Alergias agregadas: {0}";
+    public const string AllergyAlreadyStoredEn = "Already on your list: {0}";
+    public const string AllergyAlreadyStoredEs = "Ya estaban en tu lista: {0}";
+    public const string AllergyUsageEn = "Use /add followed by the allergen or a list, for example:\n/add maní\n/add maní, trigo; avena";
+    public const string AllergyUsageEs = "Usa /add seguido del alérgeno o una lista, por ejemplo:\n/add maní\n/add maní, trigo; avena";
+    public const string AllergyOwnerOnlyEn = "Only the owner can add allergies.";
+    public const string AllergyOwnerOnlyEs = "Solo el dueño puede agregar alergias.";
+    public const string AllergyLoginPromptEn = "Please log in to add allergies.";
+    public const string AllergyLoginPromptEs = "Inicia sesión para agregar alergias.";
+    public const string IngredientMatchEn = "Allergen detected: {0}";
+    public const string IngredientMatchEs = "Alérgeno detectado: {0}";
+    public const string IngredientSafeEn = "No allergen detected.";
+    public const string IngredientSafeEs = "No se detectaron alérgenos.";
+    public const string OcrFailureEn = "I couldn't read the photo. Try sending the ingredients as text.";
+    public const string OcrFailureEs = "No pude leer la foto. Prueba enviar los ingredientes como texto.";
+
+    public static string ForLanguage(ReplyLanguageValue language, string en, string es)
+        => language == ReplyLanguageValue.En ? en : es;
+
     public static string ForAuthError(AuthErrorCode code) => code switch
     {
         AuthErrorCode.InvalidInput => InvalidInput,

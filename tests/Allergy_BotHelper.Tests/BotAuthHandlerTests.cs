@@ -13,7 +13,7 @@ public class BotAuthHandlerTests
         var fake = new FakeUserRepository();
         var auth = new AuthService(fake);
         var share = new ShareService(fake);
-        var handler = new BotAuthHandler(auth, share);
+        var handler = new BotAuthHandler(auth, share, new AllergyService(fake));
         return (handler, fake, auth, share);
     }
 
