@@ -53,11 +53,19 @@ Only the owner can generate or revoke tokens; guests log in read-only with a tok
 
 ### Allergy management
 
-Para manejar las alergias:
+- `/add <ingredients>` — adds allergens for the chat owner. Accepts a single item or a comma-separated list (`/add maní, trigo`), items separated by newlines, semicolons, bullets, or numbered markers. Items are canonicalized, so duplicates and synonyms are stored once (adding `cacahuete` after `maní` keeps a single `peanut` entry). The reply echoes what was added. Only the owner can add: logged-out chats get a log-in prompt and guests get an owner-only message. `/remove` and `/listar` are planned follow-ups and are not implemented yet.
 
-- /Add -> Añadir alergia mediante texto, lista o fotografia. Solo owner.
-- /Remove -> Quitar alergia mediante texto o lista. Solo owner.
-- /Listar -> Listar las alergias. Usable por cualquiera.
+### Ingredient consultation
+
+Any non-command message is treated as an ingredient scan against the owner's allergies — there is no command to run. Send `ingredientes: ...`, `mira esta salsa ...`, `check this ...`, or just a list, and the bot replies with the allergens detected (and the triggering ingredients) or a "safe" verdict, in the language of the message.
+
+### Photo scan
+
+- Send a product photo with an `/add` caption and the OCR'd ingredients are added to your allergens.
+- Send a photo without a caption and the OCR'd ingredients are consulted against your allergens.
+- A photo with any other caption text combines both: the caption is your message and the OCR text is appended before consulting.
+
+OCR runs in `stub` mode by default (it returns fixed text, enough for local development and tests). Set `OCR_MODE=google` to use Google Cloud Vision — locally that also needs `GOOGLE_APPLICATION_CREDENTIALS` pointing to a service-account key; see `.env.example`.
 
 ## Estructura
 

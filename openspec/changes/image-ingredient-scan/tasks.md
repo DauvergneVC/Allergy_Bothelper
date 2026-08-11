@@ -65,4 +65,4 @@ AuthService, token lifecycle, BotCopy EXCEPT new ES/EN allergy strings, session-
 
 ## Phase 5 — Rollout / Documentation
 
-- [ ] 5.1 `readme.md`: document `/add` (lowercase, owner-only, text/list/photo); replace `/Add /Remove /Listar` wording — note `/remove` and `/listar` as deferred follow-ups (resolves gatekeeper naming ambiguity). REQ: proposal risk row 5.
+- [x] 5.1 `readme.md`: document `/add` (lowercase, owner-only, text/list/photo); replace `/Add /Remove /Listar` wording — note `/remove` and `/listar` as deferred follow-ups (resolves gatekeeper naming ambiguity). REQ: proposal risk row 5.
