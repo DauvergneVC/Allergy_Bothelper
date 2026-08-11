@@ -50,8 +50,8 @@ AuthService, token lifecycle, BotCopy EXCEPT new ES/EN allergy strings, session-
 
 ## Phase 3 — Slice 3: commandless text consultation
 
-- [ ] 3.1 `BotAuthHandler` Idle non-command text: Owner/Guest → strip prefix → parse → match vs owner's canonical keys → ES/EN verdict (match list w/ offending tokens, or safe); replaces `UnknownCommand`; CONSULT-8 unknown tokens non-blocking at handler level; determinism test. REQ: CONSULT-1, CONSULT-3..8.
-- [ ] 3.2 **CONSULT-2: Role == None → log-in prompt, NEVER OCR (guard before any download/OCR)**; test asserts zero `FakeOcrService` invocations. REQ: CONSULT-2.
+- [x] 3.1 `BotAuthHandler` Idle non-command text: Owner/Guest → strip prefix → parse → match vs owner's canonical keys → ES/EN verdict (match list w/ offending tokens, or safe); replaces `UnknownCommand`; CONSULT-8 unknown tokens non-blocking at handler level; determinism test. REQ: CONSULT-1, CONSULT-3..8.
+- [x] 3.2 **CONSULT-2: Role == None → log-in prompt, NEVER OCR (guard before any download/OCR)**; test asserts zero `FakeOcrService` invocations. REQ: CONSULT-2.
 - **Gate G2** (after slices 2–3): all handler flows green.
 
 ## Phase 4 — Slice 4: photo path + OCR

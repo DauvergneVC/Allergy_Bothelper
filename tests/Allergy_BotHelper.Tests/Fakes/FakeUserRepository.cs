@@ -22,6 +22,7 @@ public class FakeUserRepository : IUserRepository
 
     public int GetUserByEmailAsyncCalls { get; private set; }
     public int GetByUserShareTokenAsyncCalls { get; private set; }
+    public int GetUserByIdAsyncCalls { get; private set; }
 
     /// <summary>
     /// When true, GetUserByEmailAsync reports no match even if the email exists.
@@ -32,7 +33,10 @@ public class FakeUserRepository : IUserRepository
     public void Seed(User user) => _users.Add(user);
 
     public Task<User?> GetUserByIdAsync(ObjectId userId)
-        => Task.FromResult(_users.FirstOrDefault(u => u.Id == userId));
+    {
+        GetUserByIdAsyncCalls++;
+        return Task.FromResult(_users.FirstOrDefault(u => u.Id == userId));
+    }
 
     public Task<User?> GetUserByEmailAsync(string email)
     {

@@ -90,8 +90,54 @@ public sealed class BotAuthHandler : IBotAuthHandler
             case "/help":
                 return HelpReply(session);
             default:
-                return new BotReply(BotCopy.UnknownCommand);
+                // CONSULT-1: non-command Idle text is an ingredient consultation, not
+                // an unknown command. Anything still starting with '/' stays a command.
+                return command.StartsWith('/')
+                    ? new BotReply(BotCopy.UnknownCommand)
+                    : await HandleConsultAsync(session, command).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// CONSULT-1..9: commandless ingredient consultation. Non-command Idle text is
+    /// prefix-stripped, split, and matched against the consulted user's stored
+    /// canonical allergies. Guest sessions carry the owner's UserId, so guests
+    /// consult against the owner's allergies.
+    /// </summary>
+    private async Task<BotReply> HandleConsultAsync(ChatSession session, string text)
+    {
+        var language = ReplyLanguage.Detect(text);
+
+        // CONSULT-2: logged out → log-in prompt. The guard runs before any
+        // allergy-service (or, later, OCR) invocation.
+        if (session.Role == ChatRole.None || session.UserId is not { } userId)
+        {
+            return new BotReply(BotCopy.ForLanguage(language, BotCopy.AllergyLoginPromptEn, BotCopy.AllergyLoginPromptEs));
+        }
+
+        var consultedText = IngredientParser.StripPrefix(text);
+        var tokens = IngredientParser.SplitItems(consultedText);
+        var ownerKeys = await _allergyService.GetAllergiesAsync(userId).ConfigureAwait(false);
+
+        // No stored allergies: prompt to add allergens first instead of a misleading
+        // "no allergen detected" (CONSULT-7 applies when allergies exist but none matched).
+        if (ownerKeys.Count == 0)
+        {
+            return new BotReply(BotCopy.ForLanguage(language, BotCopy.AllergyUsageEn, BotCopy.AllergyUsageEs));
+        }
+
+        var result = IngredientMatcher.Match(tokens, ownerKeys);
+        return result.Matches.Count == 0
+            ? new BotReply(BotCopy.ForLanguage(language, BotCopy.IngredientSafeEn, BotCopy.IngredientSafeEs))
+            : BuildConsultVerdict(language, result);
+    }
+
+    private static BotReply BuildConsultVerdict(ReplyLanguageValue language, MatchResult result)
+    {
+        var lines = result.Matches.Select(match => string.Format(
+            BotCopy.ForLanguage(language, BotCopy.IngredientMatchEn, BotCopy.IngredientMatchEs),
+            $"{match.CanonicalKey} ({string.Join(", ", match.OffendingTokens)})"));
+        return new BotReply(string.Join("\n", lines));
     }
 
     /// <summary>
