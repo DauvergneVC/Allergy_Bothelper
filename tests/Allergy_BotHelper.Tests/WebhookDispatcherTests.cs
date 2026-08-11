@@ -32,6 +32,14 @@ public class WebhookDispatcherTests
         }
     };
 
+    private static PhotoSize Photo(string fileId, long fileSize) => new() { FileId = fileId, FileSize = fileSize };
+
+    private static Update PhotoUpdate(PhotoSize[] photos, string? caption = null) => new()
+    {
+        Id = 3,
+        Message = new Message { Id = 3, Chat = new Chat { Id = ChatId }, Text = caption, Photo = photos }
+    };
+
     [Fact]
     public async Task Message_ForwardsTextToHandler()
     {
@@ -43,6 +51,7 @@ public class WebhookDispatcherTests
         Assert.Equal(ChatId, call.ChatId);
         Assert.Equal("/start", call.Text);
         Assert.Null(call.Callback);
+        Assert.Null(call.Photo);
     }
 
     [Fact]
@@ -56,6 +65,7 @@ public class WebhookDispatcherTests
         var call = Assert.Single(handler.Calls);
         Assert.Equal("login", call.Callback);
         Assert.Null(call.Text);
+        Assert.Null(call.Photo);
     }
 
     [Fact]
@@ -112,5 +122,67 @@ public class WebhookDispatcherTests
         Assert.Empty(handler.Calls);
         Assert.Empty(client.SentMessages);
         Assert.Empty(client.AnsweredCallbacks);
+    }
+
+    [Fact]
+    public async Task Photo_LargestCompliantSize_IsDownloadedAndPassedToHandler()
+    {
+        var dispatcher = Create(out var client, out var handler, new BotReply("ok"));
+        client.DownloadBytes = new byte[] { 1, 2, 3 };
+
+        await dispatcher.DispatchAsync(
+            PhotoUpdate(new[] { Photo("f1", 1000), Photo("f2", 2000) }),
+            CancellationToken.None);
+
+        Assert.Equal("f2", Assert.Single(client.RequestedFileIds));
+        var call = Assert.Single(handler.Calls);
+        Assert.Equal(new byte[] { 1, 2, 3 }, call.Photo);
+        Assert.Equal("ok", Assert.Single(client.SentMessages).Text);
+    }
+
+    [Fact]
+    public async Task Photo_MixedSizes_PicksLargestCompliantOverOversize()
+    {
+        var dispatcher = Create(out var client, out var handler);
+        client.DownloadBytes = new byte[] { 9 };
+
+        await dispatcher.DispatchAsync(
+            PhotoUpdate(new[]
+            {
+                Photo("small", 1000),
+                Photo("oversize", WebhookDispatcher.MaxPhotoBytes + 1),
+                Photo("medium", 2000)
+            }),
+            CancellationToken.None);
+
+        Assert.Equal("medium", Assert.Single(client.RequestedFileIds));
+        Assert.Equal(new byte[] { 9 }, Assert.Single(handler.Calls).Photo);
+    }
+
+    [Fact]
+    public async Task Photo_AllSizesOversize_EmptyBytesPassed_NoDownloadAttempted()
+    {
+        var dispatcher = Create(out var client, out var handler);
+
+        await dispatcher.DispatchAsync(
+            PhotoUpdate(new[] { Photo("f1", WebhookDispatcher.MaxPhotoBytes + 1) }),
+            CancellationToken.None);
+
+        Assert.Empty(client.RequestedFileIds);
+        var call = Assert.Single(handler.Calls);
+        Assert.Equal(Array.Empty<byte>(), call.Photo);
+    }
+
+    [Fact]
+    public async Task Photo_DownloadFailure_NullBytesPassed_HandlerStillInvoked()
+    {
+        var dispatcher = Create(out var client, out var handler);
+        client.FailDownload = true;
+
+        await dispatcher.DispatchAsync(PhotoUpdate(new[] { Photo("f1", 1000) }), CancellationToken.None);
+
+        var call = Assert.Single(handler.Calls);
+        Assert.Null(call.Photo);
+        Assert.Empty(client.SentMessages);
     }
 }

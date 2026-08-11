@@ -7,12 +7,12 @@ namespace Allergy_BotHelper.Tests.Fakes;
 /// </summary>
 public sealed class RecordingBotHandler : IBotAuthHandler
 {
-    public List<(long ChatId, string? Text, string? Callback)> Calls { get; } = new();
+    public List<(long ChatId, string? Text, string? Callback, byte[]? Photo)> Calls { get; } = new();
     public BotReply? Reply { get; set; }
 
-    public Task<BotReply?> HandleAsync(long chatId, ChatSession session, string? text, string? callbackData, CancellationToken ct)
+    public Task<BotReply?> HandleAsync(long chatId, ChatSession session, string? text, string? callbackData, CancellationToken ct, byte[]? photoBytes = null)
     {
-        Calls.Add((chatId, text, callbackData));
+        Calls.Add((chatId, text, callbackData, photoBytes));
         return Task.FromResult(Reply);
     }
 }

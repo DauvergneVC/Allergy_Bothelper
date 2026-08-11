@@ -2,7 +2,10 @@ using System.ComponentModel.DataAnnotations;
 
 public interface IBotAuthHandler
 {
-    Task<BotReply?> HandleAsync(long chatId, ChatSession session, string? text, string? callbackData, CancellationToken ct);
+    // Decision 6: photoBytes is optional and trails ct so existing positional call
+    // sites compile unchanged (WEBHOOK-9). Tri-state: null = no photo / tolerated
+    // download failure, empty = photo rejected (oversize), non-empty = OCR input.
+    Task<BotReply?> HandleAsync(long chatId, ChatSession session, string? text, string? callbackData, CancellationToken ct, byte[]? photoBytes = null);
 }
 
 /// <summary>
@@ -17,19 +20,26 @@ public sealed class BotAuthHandler : IBotAuthHandler
     private readonly IAuthService _authService;
     private readonly IShareService _shareService;
     private readonly IAllergyService _allergyService;
+    private readonly IOcrService _ocrService;
 
-    public BotAuthHandler(IAuthService authService, IShareService shareService, IAllergyService allergyService)
+    public BotAuthHandler(IAuthService authService, IShareService shareService, IAllergyService allergyService, IOcrService ocrService)
     {
         _authService = authService;
         _shareService = shareService;
         _allergyService = allergyService;
+        _ocrService = ocrService;
     }
 
-    public async Task<BotReply?> HandleAsync(long chatId, ChatSession session, string? text, string? callbackData, CancellationToken ct)
+    public async Task<BotReply?> HandleAsync(long chatId, ChatSession session, string? text, string? callbackData, CancellationToken ct, byte[]? photoBytes = null)
     {
         if (callbackData is not null)
         {
             return HandleCallback(session, callbackData);
+        }
+
+        if (photoBytes is not null)
+        {
+            return await HandlePhotoAsync(session, text, photoBytes, ct).ConfigureAwait(false);
         }
 
         if (text is null)
@@ -121,6 +131,136 @@ public sealed class BotAuthHandler : IBotAuthHandler
 
         // No stored allergies: prompt to add allergens first instead of a misleading
         // "no allergen detected" (CONSULT-7 applies when allergies exist but none matched).
+        if (ownerKeys.Count == 0)
+        {
+            return new BotReply(BotCopy.ForLanguage(language, BotCopy.AllergyUsageEn, BotCopy.AllergyUsageEs));
+        }
+
+        var result = IngredientMatcher.Match(tokens, ownerKeys);
+        return result.Matches.Count == 0
+            ? new BotReply(BotCopy.ForLanguage(language, BotCopy.IngredientSafeEn, BotCopy.IngredientSafeEs))
+            : BuildConsultVerdict(language, result);
+    }
+
+    /// <summary>
+    /// Decision 2: a photo is content only when its caption is not a command. A caption
+    /// starting with '/' takes the command path and is never OCR'd; only <c>/add</c>
+    /// consumes the photo (ADD-3). Photos without a command caption run the consult
+    /// flow (CONSULT-4). Photos during a non-idle flow are ignored.
+    /// </summary>
+    private async Task<BotReply?> HandlePhotoAsync(ChatSession session, string? caption, byte[] photoBytes, CancellationToken ct)
+    {
+        if (session.State != SessionState.Idle)
+        {
+            return null;
+        }
+
+        var language = ReplyLanguage.Detect(caption);
+
+        if (caption is not null && caption.StartsWith('/'))
+        {
+            return IsAddCommand(caption)
+                ? await HandleAddPhotoAsync(session, language, photoBytes, ct).ConfigureAwait(false)
+                : await HandleIdleCommandAsync(session, caption).ConfigureAwait(false);
+        }
+
+        return await HandleConsultPhotoAsync(session, language, caption, photoBytes, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// ADD-3: a photo captioned <c>/add</c> is an add command whose ingredient list
+    /// comes from the OCR'd image. ADD-8 role gating and the oversize/failure guards
+    /// (OCR-5, OCR-6) run before any persistence.
+    /// </summary>
+    private async Task<BotReply> HandleAddPhotoAsync(ChatSession session, ReplyLanguageValue language, byte[] photoBytes, CancellationToken ct)
+    {
+        if (session.Role == ChatRole.None)
+        {
+            return new BotReply(BotCopy.ForLanguage(language, BotCopy.AllergyLoginPromptEn, BotCopy.AllergyLoginPromptEs));
+        }
+
+        if (session.Role == ChatRole.Guest)
+        {
+            return new BotReply(BotCopy.ForLanguage(language, BotCopy.AllergyOwnerOnlyEn, BotCopy.AllergyOwnerOnlyEs));
+        }
+
+        if (session.UserId is not { } userId)
+        {
+            return new BotReply(BotCopy.ForLanguage(language, BotCopy.AllergyLoginPromptEn, BotCopy.AllergyLoginPromptEs));
+        }
+
+        // OCR-6: empty bytes = photo rejected (oversize) → friendly failure, nothing
+        // persisted, no Vision call.
+        if (photoBytes.Length == 0)
+        {
+            return new BotReply(BotCopy.ForLanguage(language, BotCopy.OcrFailureEn, BotCopy.OcrFailureEs));
+        }
+
+        string ocrText;
+        try
+        {
+            ocrText = await _ocrService.RecognizeAsync(photoBytes, ct).ConfigureAwait(false) ?? string.Empty;
+        }
+        catch (OcrFailureException)
+        {
+            // ADD-3 / OCR-5: typed failure → friendly reply, nothing persisted.
+            return new BotReply(BotCopy.ForLanguage(language, BotCopy.OcrFailureEn, BotCopy.OcrFailureEs));
+        }
+
+        var items = IngredientParser.SplitItems(ocrText);
+        if (items.Count == 0)
+        {
+            return new BotReply(BotCopy.ForLanguage(language, BotCopy.AllergyUsageEn, BotCopy.AllergyUsageEs));
+        }
+
+        var added = new List<string>();
+        var duplicates = new List<string>();
+        foreach (var item in items)
+        {
+            var canonical = Vocabulary.Canonicalize(item);
+            var stored = await _allergyService.AddAsync(userId, canonical, item).ConfigureAwait(false);
+            (stored ? added : duplicates).Add(item);
+        }
+
+        return BuildAddEcho(language, added, duplicates);
+    }
+
+    /// <summary>
+    /// CONSULT-2..9: commandless photo consultation. The photo's OCR text is parsed
+    /// like any text input; a non-command caption is the user's free text (prefix
+    /// stripped) and is appended before consulting. Logged-out chats get a log-in
+    /// prompt and are never OCR'd; typed failures become a friendly ES/EN reply.
+    /// </summary>
+    private async Task<BotReply> HandleConsultPhotoAsync(ChatSession session, ReplyLanguageValue language, string? caption, byte[] photoBytes, CancellationToken ct)
+    {
+        if (session.Role == ChatRole.None || session.UserId is not { } userId)
+        {
+            return new BotReply(BotCopy.ForLanguage(language, BotCopy.AllergyLoginPromptEn, BotCopy.AllergyLoginPromptEs));
+        }
+
+        // OCR-6: empty bytes = photo rejected (oversize) → friendly failure, no Vision call.
+        if (photoBytes.Length == 0)
+        {
+            return new BotReply(BotCopy.ForLanguage(language, BotCopy.OcrFailureEn, BotCopy.OcrFailureEs));
+        }
+
+        string ocrText;
+        try
+        {
+            ocrText = await _ocrService.RecognizeAsync(photoBytes, ct).ConfigureAwait(false) ?? string.Empty;
+        }
+        catch (OcrFailureException)
+        {
+            // OCR-5 / CONSULT-9: typed failure → friendly reply, never a crash.
+            return new BotReply(BotCopy.ForLanguage(language, BotCopy.OcrFailureEn, BotCopy.OcrFailureEs));
+        }
+
+        var captionCore = string.IsNullOrWhiteSpace(caption) ? string.Empty : IngredientParser.StripPrefix(caption);
+        var consultedText = string.Join("\n", new[] { captionCore, ocrText }).Trim();
+
+        var tokens = IngredientParser.SplitItems(consultedText);
+        var ownerKeys = await _allergyService.GetAllergiesAsync(userId).ConfigureAwait(false);
+
         if (ownerKeys.Count == 0)
         {
             return new BotReply(BotCopy.ForLanguage(language, BotCopy.AllergyUsageEn, BotCopy.AllergyUsageEs));

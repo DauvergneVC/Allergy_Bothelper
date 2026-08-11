@@ -25,7 +25,7 @@ public sealed class SessionAwareHandler : IBotAuthHandler
         _store = store;
     }
 
-    public async Task<BotReply?> HandleAsync(long chatId, ChatSession session, string? text, string? callbackData, CancellationToken ct)
+    public async Task<BotReply?> HandleAsync(long chatId, ChatSession session, string? text, string? callbackData, CancellationToken ct, byte[]? photoBytes = null)
     {
         var gate = _gates.GetOrAdd(chatId, _ => new SemaphoreSlim(1, 1));
         await gate.WaitAsync(ct).ConfigureAwait(false);
@@ -37,7 +37,7 @@ public sealed class SessionAwareHandler : IBotAuthHandler
             for (var attempt = 0; attempt < MaxAttempts; attempt++)
             {
                 var before = Snapshot(current);
-                var reply = await _inner.HandleAsync(chatId, current, text, callbackData, ct).ConfigureAwait(false);
+                var reply = await _inner.HandleAsync(chatId, current, text, callbackData, ct, photoBytes).ConfigureAwait(false);
                 lastReply = reply;
 
                 if (!IsDirty(before, current))

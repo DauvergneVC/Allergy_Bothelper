@@ -81,6 +81,54 @@ public class EnvConfigTests
     }
 
     [Fact]
+    public void Resolve_OcrModeUnset_DefaultsToStub()
+    {
+        var config = EnvConfig.Resolve(ValidEnv());
+
+        Assert.Equal(OcrMode.Stub, config.OcrMode);
+    }
+
+    [Fact]
+    public void Resolve_OcrModeGoogle_SelectsGoogle()
+    {
+        var env = ValidEnv();
+        env["OCR_MODE"] = "google";
+
+        Assert.Equal(OcrMode.Google, EnvConfig.Resolve(env).OcrMode);
+    }
+
+    [Fact]
+    public void Resolve_OcrModeGoogle_CaseInsensitive()
+    {
+        var env = ValidEnv();
+        env["OCR_MODE"] = "GOOGLE";
+
+        Assert.Equal(OcrMode.Google, EnvConfig.Resolve(env).OcrMode);
+    }
+
+    [Theory]
+    [InlineData("stub")]
+    [InlineData("bogus")]
+    [InlineData("")]
+    public void Resolve_OcrModeUnknownOrBlank_FallsBackToStub(string value)
+    {
+        var env = ValidEnv();
+        env["OCR_MODE"] = value;
+
+        Assert.Equal(OcrMode.Stub, EnvConfig.Resolve(env).OcrMode);
+    }
+
+    [Fact]
+    public void Resolve_OcrModeAbsent_IsNotRequired_StartupProceeds()
+    {
+        // ValidEnv() deliberately omits OCR_MODE; resolution must succeed (CONFIG-7).
+        var config = EnvConfig.Resolve(ValidEnv());
+
+        Assert.NotNull(config);
+        Assert.Equal(OcrMode.Stub, config.OcrMode);
+    }
+
+    [Fact]
     public void ProcessEnv_WinsOverDotEnvFile_AndFileFillsGaps()
     {
         var processWins = $"PROC_ENV_TEST_{Guid.NewGuid():N}";

@@ -56,7 +56,7 @@ public class BotCopyTests
     {
         var fake = new FakeUserRepository();
         fake.Seed(new User("owner@example.com", BcryptFixtures.Password123Hash));
-        var handler = new BotAuthHandler(new AuthService(fake), new ShareService(fake), new AllergyService(fake));
+        var handler = new BotAuthHandler(new AuthService(fake), new ShareService(fake), new AllergyService(fake), new StubOcrService());
         const long chatId = 1;
         var session = new ChatSession { ChatId = chatId };
 

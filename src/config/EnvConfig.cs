@@ -1,16 +1,24 @@
+public enum OcrMode
+{
+    Stub,
+    Google
+}
+
 public sealed record BotConfig(
     string TelegramApiKey,
     string MongoUri,
     string MongoDatabase,
     string WebhookUrl,
     string WebhookSecretToken,
-    int Port);
+    int Port,
+    OcrMode OcrMode);
 
 /// <summary>
 /// Pure environment resolution. <see cref="Resolve"/> reads a key-value view of the
 /// merged environment (process wins, <c>.env</c> fills gaps) and fails fast naming any
 /// missing required variable. <see cref="Port"/> is optional and defaults to
-/// <see cref="DefaultPort"/>.
+/// <see cref="DefaultPort"/>; <c>OCR_MODE</c> is optional and defaults to stub
+/// (CONFIG-7).
 /// </summary>
 public static class EnvConfig
 {
@@ -33,6 +41,16 @@ public static class EnvConfig
         setEnvVars: true,
         clobberExistingVars: false,
         onlyExactPath: true);
+
+    /// <summary>
+    /// CONFIG-7: <c>OCR_MODE</c> is optional and defaults to stub. Only the value
+    /// <c>google</c> (case-insensitive) selects the Google implementation; any unknown
+    /// or blank value falls back to the stub default.
+    /// </summary>
+    public static OcrMode OcrModeFrom(string? value)
+        => string.Equals(value, "google", StringComparison.OrdinalIgnoreCase)
+            ? OcrMode.Google
+            : OcrMode.Stub;
 
     public static BotConfig Resolve(IReadOnlyDictionary<string, string?> env)
     {
@@ -59,6 +77,7 @@ public static class EnvConfig
             env["MONGO_INITDB_DATABASE"]!,
             env["WEBHOOK_URL"]!,
             env["WEBHOOK_SECRET_TOKEN"]!,
-            port);
+            port,
+            OcrModeFrom(env.GetValueOrDefault("OCR_MODE")));
     }
 }

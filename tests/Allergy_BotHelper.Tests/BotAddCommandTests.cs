@@ -13,7 +13,8 @@ public class BotAddCommandTests
         var handler = new BotAuthHandler(
             new AuthService(fake),
             new ShareService(fake),
-            new AllergyService(fake));
+            new AllergyService(fake),
+            new StubOcrService());
         return (handler, fake);
     }
 

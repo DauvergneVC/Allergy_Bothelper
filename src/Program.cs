@@ -54,6 +54,12 @@ namespace Allergy_BotHelper.src
             builder.Services.AddSingleton<IShareService, ShareService>();
             builder.Services.AddSingleton<ISessionStore, MongoSessionStore>();
 
+            // OCR-4: OCR_MODE selects the IOcrService implementation. Google Vision is
+            // lazy (no client at construction), so stub mode needs no GCP credentials.
+            builder.Services.AddSingleton<IOcrService>(config.OcrMode == OcrMode.Google
+                ? new GoogleVisionOcrService()
+                : new StubOcrService());
+
             builder.Services.AddSingleton<BotAuthHandler>();
             builder.Services.AddSingleton<IBotAuthHandler>(sp =>
                 new SessionAwareHandler(
