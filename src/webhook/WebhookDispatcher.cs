@@ -28,7 +28,14 @@ public sealed class WebhookDispatcher
 
         if (update.CallbackQuery is { } query)
         {
-            chatId = query.Message!.Chat.Id;
+            if (query.Message is null)
+            {
+                // CallbackQuery without Message (e.g., inline keyboard from inline mode) — skip
+                await _client.AnswerCallbackQuery(query.Id, cancellationToken: ct).ConfigureAwait(false);
+                return;
+            }
+
+            chatId = query.Message.Chat.Id;
             await _client.AnswerCallbackQuery(query.Id, cancellationToken: ct).ConfigureAwait(false);
             reply = await _handler.HandleAsync(chatId.Value, new ChatSession(), null, query.Data, ct).ConfigureAwait(false);
         }
