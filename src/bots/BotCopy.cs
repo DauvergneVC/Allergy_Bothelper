@@ -26,7 +26,7 @@ public static class BotCopy
     public const string WrongPassword = "Incorrect password.";
     public const string InvalidToken = "That token is invalid or expired.";
     public const string InvalidInput = "Please provide a valid email and password.";
-    public const string HelpCommands = "Available commands:\n/login — log in as the owner\n/register — create an owner account\n/share — generate a new guest token (owner only)\n/revoke — delete the guest token (owner only)\n/logout — clear this chat's session\n/cancel — cancel the current step\n/help — show this list";
+    public const string HelpCommands = "Available commands:\n/login — log in as the owner\n/register — create an owner account\n/share — generate a new guest token (owner only)\n/revoke — delete the guest token (owner only)\n/add — add allergens (owner only)\n/listar — list your allergens (owner only)\n/remove — remove allergens (owner only)\n/logout — clear this chat's session\n/cancel — cancel the current step\n/help — show this list";
     public const string HelpCommandsLoggedOut = "Available commands:\n/login — log in as the owner\n/register — create an owner account";
 
     // Bilingual ES/EN copy for the /add and ingredient-consult flows (additive; the
@@ -47,6 +47,26 @@ public static class BotCopy
     public const string IngredientSafeEs = "No se detectaron alérgenos.";
     public const string OcrFailureEn = "I couldn't read the photo. Try sending the ingredients as text.";
     public const string OcrFailureEs = "No pude leer la foto. Prueba enviar los ingredientes como texto.";
+
+    // /listar and /remove bilingual copy
+    public const string AllergyListEmptyEn = "You have no allergens on your list.";
+    public const string AllergyListEmptyEs = "No tienes alergias en tu lista.";
+    public const string AllergyListHeaderEn = "Your allergens:";
+    public const string AllergyListHeaderEs = "Tus alergias:";
+    public const string AllergyListOwnerOnlyEn = "Only the owner can view allergens.";
+    public const string AllergyListOwnerOnlyEs = "Solo el dueño puede ver las alergias.";
+    public const string AllergyListLoginPromptEn = "Please log in to view your allergens.";
+    public const string AllergyListLoginPromptEs = "Inicia sesión para ver tus alergias.";
+    public const string AllergyRemovedEn = "Removed allergens: {0}";
+    public const string AllergyRemovedEs = "Alergias eliminadas: {0}";
+    public const string AllergyNotFoundEn = "Not on your list: {0}";
+    public const string AllergyNotFoundEs = "No estaban en tu lista: {0}";
+    public const string AllergyRemoveUsageEn = "Use /remove followed by the allergen or a list, for example:\n/remove maní\n/remove maní, trigo";
+    public const string AllergyRemoveUsageEs = "Usa /remove seguido del alérgeno o una lista, por ejemplo:\n/remove maní\n/remove maní, trigo";
+    public const string AllergyRemoveOwnerOnlyEn = "Only the owner can remove allergies.";
+    public const string AllergyRemoveOwnerOnlyEs = "Solo el dueño puede eliminar alergias.";
+    public const string AllergyRemoveLoginPromptEn = "Please log in to remove allergies.";
+    public const string AllergyRemoveLoginPromptEs = "Inicia sesión para eliminar alergias.";
 
     public static string ForLanguage(ReplyLanguageValue language, string en, string es)
         => language == ReplyLanguageValue.En ? en : es;

@@ -100,6 +100,20 @@ public sealed class BotAuthHandler : IBotAuthHandler
             case "/help":
                 return HelpReply(session);
             default:
+                // /add, /listar, /remove have arguments or are case-sensitive
+                if (IsAddCommand(command))
+                {
+                    return await HandleAddAsync(session, command).ConfigureAwait(false);
+                }
+                if (IsListCommand(command))
+                {
+                    return await HandleListAsync(session).ConfigureAwait(false);
+                }
+                if (IsRemoveCommand(command))
+                {
+                    return await HandleRemoveAsync(session, command).ConfigureAwait(false);
+                }
+
                 // CONSULT-1: non-command Idle text is an ingredient consultation, not
                 // an unknown command. Anything still starting with '/' stays a command.
                 return command.StartsWith('/')
@@ -347,6 +361,139 @@ public sealed class BotAuthHandler : IBotAuthHandler
             lines.Add(string.Format(
                 BotCopy.ForLanguage(language, BotCopy.AllergyAlreadyStoredEn, BotCopy.AllergyAlreadyStoredEs),
                 string.Join(", ", duplicates)));
+        }
+        return new BotReply(string.Join("\n", lines));
+    }
+
+    /// <summary>
+    /// /listar command (case-sensitive, exact match). Owner-only, lists all stored allergens.
+    /// </summary>
+    private static bool IsListCommand(string command)
+        => string.Equals(command, "/listar", StringComparison.Ordinal);
+
+    private async Task<BotReply> HandleListAsync(ChatSession session)
+    {
+        // Role gating: None → login prompt, Guest → owner-only message
+        if (session.Role == ChatRole.None)
+        {
+            return new BotReply(BotCopy.AllergyListLoginPromptEs);
+        }
+
+        if (session.Role == ChatRole.Guest)
+        {
+            return new BotReply(BotCopy.AllergyListOwnerOnlyEs);
+        }
+
+        if (session.UserId is not { } userId)
+        {
+            return new BotReply(BotCopy.AllergyListLoginPromptEs);
+        }
+
+        var allergens = await _allergyService.GetAllergiesWithDisplayAsync(userId).ConfigureAwait(false);
+        if (allergens.Count == 0)
+        {
+            return new BotReply(BotCopy.AllergyListEmptyEs);
+        }
+
+        var lines = new List<string> { BotCopy.AllergyListHeaderEs };
+        foreach (var (canonical, display) in allergens)
+        {
+            lines.Add($"• {display} ({canonical})");
+        }
+
+        return new BotReply(string.Join("\n", lines));
+    }
+
+    /// <summary>
+    /// /remove command (case-sensitive). Matches "/remove" and "/remove ..." only.
+    /// Owner-only, removes specified allergens.
+    /// </summary>
+    private static bool IsRemoveCommand(string command)
+        => command.StartsWith("/remove", StringComparison.Ordinal)
+            && (command.Length == 7 || char.IsWhiteSpace(command[7]));
+
+    private async Task<BotReply> HandleRemoveAsync(ChatSession session, string command)
+    {
+        var language = ReplyLanguage.Detect(command);
+
+        var argument = command.Length == 7 ? string.Empty : command[7..].Trim();
+        if (argument.Length == 0)
+        {
+            // Bare /remove (no content) → usage (default to Spanish for consistency with /add)
+            return new BotReply(BotCopy.AllergyRemoveUsageEs);
+        }
+
+        // Role gating: None → login prompt, Guest → owner-only message
+        if (session.Role == ChatRole.None)
+        {
+            return new BotReply(BotCopy.ForLanguage(language, BotCopy.AllergyRemoveLoginPromptEn, BotCopy.AllergyRemoveLoginPromptEs));
+        }
+
+        if (session.Role == ChatRole.Guest)
+        {
+            return new BotReply(BotCopy.ForLanguage(language, BotCopy.AllergyRemoveOwnerOnlyEn, BotCopy.AllergyRemoveOwnerOnlyEs));
+        }
+
+        if (session.UserId is not { } userId)
+        {
+            return new BotReply(BotCopy.ForLanguage(language, BotCopy.AllergyRemoveLoginPromptEn, BotCopy.AllergyRemoveLoginPromptEs));
+        }
+
+        var items = IngredientParser.SplitItems(argument);
+        if (items.Count == 0)
+        {
+            return new BotReply(BotCopy.ForLanguage(language, BotCopy.AllergyRemoveUsageEn, BotCopy.AllergyRemoveUsageEs));
+        }
+
+        // Get current allergens to map canonical → display
+        var currentAllergens = await _allergyService.GetAllergiesWithDisplayAsync(userId).ConfigureAwait(false);
+        var canonicalToDisplay = currentAllergens.ToDictionary(x => x.Canonical, x => x.Display);
+
+        // Canonicalize the items to remove and track which were found
+        var removedDisplays = new List<string>();
+        var notFoundDisplays = new List<string>();
+
+        foreach (var item in items)
+        {
+            var canonical = Vocabulary.Canonicalize(item);
+            if (canonicalToDisplay.TryGetValue(canonical, out var display))
+            {
+                removedDisplays.Add(display);
+            }
+            else
+            {
+                notFoundDisplays.Add(item);
+            }
+        }
+
+        // Actually remove from the service
+        var canonicalKeys = items.Select(Vocabulary.Canonicalize).ToList();
+        await _allergyService.RemoveAsync(userId, canonicalKeys).ConfigureAwait(false);
+
+        return BuildRemoveEcho(language, removedDisplays, notFoundDisplays);
+    }
+
+    private static BotReply BuildRemoveEcho(ReplyLanguageValue language, IReadOnlyList<string> removedDisplays, IReadOnlyList<string> notFoundDisplays)
+    {
+        var lines = new List<string>();
+        if (removedDisplays.Count > 0)
+        {
+            lines.Add(string.Format(
+                BotCopy.ForLanguage(language, BotCopy.AllergyRemovedEn, BotCopy.AllergyRemovedEs),
+                string.Join(", ", removedDisplays)));
+        }
+        if (notFoundDisplays.Count > 0)
+        {
+            lines.Add(string.Format(
+                BotCopy.ForLanguage(language, BotCopy.AllergyNotFoundEn, BotCopy.AllergyNotFoundEs),
+                string.Join(", ", notFoundDisplays)));
+        }
+        if (lines.Count == 0)
+        {
+            // Nothing was removed and nothing was "not found" — all requested were already absent
+            lines.Add(string.Format(
+                BotCopy.ForLanguage(language, BotCopy.AllergyNotFoundEn, BotCopy.AllergyNotFoundEs),
+                "none"));
         }
         return new BotReply(string.Join("\n", lines));
     }

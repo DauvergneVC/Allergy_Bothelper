@@ -40,4 +40,68 @@ public class AllergyService : IAllergyService
         var user = await _userRepository.GetUserByIdAsync(userId).ConfigureAwait(false);
         return user?.Allergies ?? (IReadOnlyList<string>)Array.Empty<string>();
     }
+
+    public async Task<IReadOnlyList<(string Canonical, string Display)>> GetAllergiesWithDisplayAsync(ObjectId userId)
+    {
+        var user = await _userRepository.GetUserByIdAsync(userId).ConfigureAwait(false);
+        if (user?.Allergies is null || user.Allergies.Count == 0)
+        {
+            return Array.Empty<(string, string)>();
+        }
+
+        var display = user.AllergyDisplay ?? new List<string>();
+        var result = new List<(string, string)>(user.Allergies.Count);
+
+        for (var i = 0; i < user.Allergies.Count; i++)
+        {
+            var canonical = user.Allergies[i];
+            var displayLabel = i < display.Count ? display[i] : canonical;
+            result.Add((canonical, displayLabel));
+        }
+
+        return result;
+    }
+
+    public async Task<int> RemoveAsync(ObjectId userId, IEnumerable<string> canonicalKeys)
+    {
+        var user = await _userRepository.GetUserByIdAsync(userId).ConfigureAwait(false);
+        if (user?.Allergies is null || user.Allergies.Count == 0)
+        {
+            return 0;
+        }
+
+        var keysToRemove = canonicalKeys.ToHashSet();
+        var removed = 0;
+
+        // Remove from both Allergies and AllergyDisplay in sync
+        var display = user.AllergyDisplay ?? new List<string>();
+        var newAllergies = new List<string>();
+        var newDisplay = new List<string>();
+
+        for (var i = 0; i < user.Allergies.Count; i++)
+        {
+            var canonical = user.Allergies[i];
+            if (keysToRemove.Contains(canonical))
+            {
+                removed++;
+            }
+            else
+            {
+                newAllergies.Add(canonical);
+                if (i < display.Count)
+                {
+                    newDisplay.Add(display[i]);
+                }
+            }
+        }
+
+        if (removed > 0)
+        {
+            user.Allergies = newAllergies;
+            user.AllergyDisplay = newDisplay;
+            await _userRepository.UpdateUserAsync(user).ConfigureAwait(false);
+        }
+
+        return removed;
+    }
 }
