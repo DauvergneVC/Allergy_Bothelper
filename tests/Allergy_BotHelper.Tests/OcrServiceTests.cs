@@ -2,46 +2,51 @@ using Google.Cloud.Vision.V1;
 
 namespace Allergy_BotHelper.Tests;
 
+/// <summary>
+/// Tests for OCR services. Note: scenarios OCR-3 (document detection, ADC auth) and CONFIG-8
+/// (SA key local path) are static-only by design — they require real GCP credentials and cannot
+/// be tested in CI. Use GcpFactAttribute with RUN_GCP_TESTS=1 for integration tests with real GCP.
+/// </summary>
 public class OcrServiceTests
 {
     [Fact]
-    public void Stub_ReturnsConfiguredCannedText()
+    public async Task Stub_ReturnsConfiguredCannedText()
     {
         var service = new StubOcrService("maní, leche");
 
-        var result = service.RecognizeAsync(new byte[] { 1 }, CancellationToken.None).Result;
+        var result = await service.RecognizeAsync(new byte[] { 1 }, CancellationToken.None);
 
         Assert.Equal("maní, leche", result);
     }
 
     [Fact]
-    public void Stub_DefaultCannedText_IsFixedDemoText()
+    public async Task Stub_DefaultCannedText_IsFixedDemoText()
     {
         var service = new StubOcrService();
 
-        var result = service.RecognizeAsync(new byte[] { 1 }, CancellationToken.None).Result;
+        var result = await service.RecognizeAsync(new byte[] { 1 }, CancellationToken.None);
 
         Assert.Equal(StubOcrService.DefaultCannedText, result);
     }
 
     [Fact]
-    public void Stub_ConfiguredEmpty_ReturnsEmptyText()
+    public async Task Stub_ConfiguredEmpty_ReturnsEmptyText()
     {
         var service = new StubOcrService(string.Empty);
 
-        var result = service.RecognizeAsync(new byte[] { 1 }, CancellationToken.None).Result;
+        var result = await service.RecognizeAsync(new byte[] { 1 }, CancellationToken.None);
 
         Assert.Equal(string.Empty, result);
     }
 
     [Fact]
-    public void Stub_IsDeterministicAndCredentialFree()
+    public async Task Stub_IsDeterministicAndCredentialFree()
     {
         var service = new StubOcrService("peanut");
         var bytes = new byte[] { 1, 2, 3 };
 
-        var first = service.RecognizeAsync(bytes, CancellationToken.None).Result;
-        var second = service.RecognizeAsync(bytes, CancellationToken.None).Result;
+        var first = await service.RecognizeAsync(bytes, CancellationToken.None);
+        var second = await service.RecognizeAsync(bytes, CancellationToken.None);
 
         Assert.Equal(first, second);
         Assert.Equal("peanut", first);
