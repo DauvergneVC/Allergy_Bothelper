@@ -1,87 +1,217 @@
-# Allergy bot helper
+# Allergy Bot Helper
 
-Este proyecto esta pensado en dar una herramienta "simple" para poder consultar las alergias de una persona.
-la idea es simplemente utilziar un bot de Whatsapp/Telegram, de momento telegram, donde pueda dar las alergias de la persona y con eso se pueda preguntar sobre cuales son o enviar una imagen sobre los componentes de un producto para saber si puede afectar de alguna manera.
+Bot de Telegram para gestionar alergias alimentarias. Permite a los usuarios registrar sus alergenos y consultar rápidamente si un producto o ingrediente es seguro, mediante comandos de texto o escaneo de fotos con OCR.
 
-## Deciciones
+## Características
 
-- **MongoDB**: Para poder utilizar archivos que pertenezcan a una persona, asi como poder almacenar imagenes y analisarlas.
-- **C#**: Esta decicion es simplemente por gusto, podria haebr utilizado Python y habria sido mas sencillo, pero tube la necesidad de practicar trabajar con clases y un lenguaje estructurado como C#.
-- **Arquitectura por capas**: me fui por una arquitectura simple, adaptandola para ser bien sencilla dado el caso.
+- **Gestión de alergias**: registra, lista y elimina alergenos con comandos simples (`/add`, `/listar`, `/remove`)
+- **Consulta de ingredientes**: envía una lista de ingredientes (texto o foto) y el bot te dice si contiene alergenos
+- **OCR con Google Vision**: escanea fotos de productos para extraer ingredientes automáticamente
+- **Sesiones persistentes**: las conversaciones se guardan en MongoDB, sobreviven a reinicios
+- **Compartir acceso**: genera tokens para que otros usuarios consulten tus alergias (solo lectura)
+- **Bilingüe ES/EN**: detecta automáticamente el idioma de tus mensajes
 
-## Arquitectura de despliegue (plan)
+## Instalación
 
-- **Cloud Run (GCP), serverless multi-instance**: el bot corre como una imagen de contenedor única; las instancias escalan elásticamente y no tienen almacenamiento local persistente. El `docker-compose` local queda solo para desarrollo (MongoDB); Cloud Run no ejecuta compose.
-- **Telegram por webhook**: en vez de long-polling, el bot expone un endpoint HTTPS que recibe los updates. Implica validar el secreto del webhook y responder rápido; los cold starts se absorben con `min-instances=1`.
-- **Sesiones por chat en MongoDB**: los flujos conversacionales se persisten por `chatId` con TTL, para que un update pueda caer en cualquier instancia sin perder el paso actual. Hoy están en memoria y se pierden al reiniciar; este cambio es requisito del multi-instance.
-- **MongoDB en producción**: Atlas free tier (M0); el driver `MongoDB.Driver` no cambia.
-- **Configuración**: env vars / Secret Manager en producción; `.env` solo local.
-- **OCR**: Google Vision API (cuota gratuita) — sin sidecar Python en Cloud Run.
-- **Traducción ES↔EN**: Google Cloud Translation API como fallback del matcher de alergias — sin Argos local.
-- **Empaquetado**: Dockerfile multi-stage (.NET 10 SDK → runtime), la app escucha en `$PORT`, usuario no-root.
+### Requisitos
 
-## Bot commands
+- .NET 10 SDK
+- MongoDB (local o Atlas)
+- (Opcional) Docker para contenerización
+- (Opcional) Cuenta de Google Cloud para OCR real
 
-The implemented surface is conversational authentication. Each command walks you through a step-by-step flow, and `/start` shows a menu with buttons.
+### Desarrollo local
 
-### Start
+1. **Clona el repositorio**:
+   ```bash
+   git clone <repo-url>
+   cd Allergy_BotHelper
+   ```
 
-- `/start` — shows the main menu with **Login** and **Register** buttons.
+2. **Configura las variables de entorno**:
+   ```bash
+   cp .env.example .env
+   # Edita .env con tus valores
+   ```
 
-### Authentication
+3. **Inicia MongoDB** (con Docker):
+   ```bash
+   docker run -d -p 27017:27017 \
+     -e MONGO_INITDB_ROOT_USERNAME=root \
+     -e MONGO_INITDB_ROOT_PASSWORD=password \
+     -e MONGO_INITDB_DATABASE=Allergy_helper_db \
+     --name mongodb mongo:7
+   ```
 
-- `/login` — owner login (email + password) or guest login (share token).
-  1. Enter your email or a share token.
-  2. If you entered an email, enter your password to finish.
-- `/register` — creates a new owner account.
-  1. Enter a new email.
-  2. Enter a password to finish.
-- `/logout` — clears the session for this chat.
-- `/cancel` — aborts the current step and returns to the idle menu.
+4. **Ejecuta el bot**:
+   ```bash
+   dotnet run
+   ```
 
-### Token sharing (owner only)
+### Docker
 
-- `/share` — generates a new share token. Anyone holding it can log in as a guest and view the owner's allergies read-only. A new token invalidates the previous one.
-- `/revoke` — revokes the current token, so guests can no longer log in with it.
-
-Only the owner can generate or revoke tokens; guests log in read-only with a token.
-
-### Session and storage
-
-- Chat sessions are **in-memory only** and reset on restart: active login, role, and current step are lost. (Target: persisted in MongoDB with TTL so flows survive across Cloud Run instances — see Deployment architecture.)
-- Share tokens persist in MongoDB until they are revoked or regenerated.
-
-### Allergy management
-
-- `/add <ingredients>` — adds allergens for the chat owner. Accepts a single item or a comma-separated list (`/add maní, trigo`), items separated by newlines, semicolons, bullets, or numbered markers. Items are canonicalized, so duplicates and synonyms are stored once (adding `cacahuete` after `maní` keeps a single `peanut` entry). The reply echoes what was added. Only the owner can add: logged-out chats get a log-in prompt and guests get an owner-only message. `/remove` and `/listar` are planned follow-ups and are not implemented yet.
-
-### Ingredient consultation
-
-Any non-command message is treated as an ingredient scan against the owner's allergies — there is no command to run. Send `ingredientes: ...`, `mira esta salsa ...`, `check this ...`, or just a list, and the bot replies with the allergens detected (and the triggering ingredients) or a "safe" verdict, in the language of the message.
-
-### Photo scan
-
-- Send a product photo with an `/add` caption and the OCR'd ingredients are added to your allergens.
-- Send a photo without a caption and the OCR'd ingredients are consulted against your allergens.
-- A photo with any other caption text combines both: the caption is your message and the OCR text is appended before consulting.
-
-OCR runs in `stub` mode by default (it returns fixed text, enough for local development and tests). Set `OCR_MODE=google` to use Google Cloud Vision — locally that also needs `GOOGLE_APPLICATION_CREDENTIALS` pointing to a service-account key; see `.env.example`.
-
-## Estructura
-
+```bash
+docker build -t allergy-bot .
+docker run -d -p 8080:8080 --env-file .env allergy-bot
 ```
-    src/
-    ├─ Program.cs → arranca el host, registra DI
-    ├─ Models/ → solo entidades (User)
-    ├─ Data/
-    │ ├─ MongoDbContext.cs → conexión (único punto que conoce Mongo)
-    │ └─ Repositories/
-    │   ├─ IUserRepository.cs
-    │   ├─ UserRepository.cs
-    ├─ Services/
-    │ ├─ AuthService.cs → lógica de login/register/autorización
-    │ ├─ AllergyService.cs → Add/Remove/Listar
-    │ └─ ShareService.cs → generar/revocar tokens
-    ├─ Commands/ → comandos del bot (usan Services)
-    └─ Channels/ → adapters Telegram/WhatsApp
+
+### Cloud Run (GCP)
+
+```bash
+# Build y push a Artifact Registry
+gcloud builds submit --tag gcr.io/PROJECT_ID/allergy-bot
+gcloud run deploy allergy-bot \
+  --image gcr.io/PROJECT_ID/allergy-bot \
+  --platform managed \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --set-env-vars TELEGRAM_API_KEY=...,WEBHOOK_URL=...,WEBHOOK_SECRET_TOKEN=...,MONGO_URI=...
 ```
+
+## Configuración
+
+Variables de entorno (ver `.env.example`):
+
+| Variable | Descripción | Default |
+|----------|-------------|---------|
+| `TELEGRAM_API_KEY` | Token del bot de Telegram (obtenido de @BotFather) | Requerido |
+| `WEBHOOK_URL` | URL pública del webhook (ej: `https://tu-dominio.com/webhook`) | Requerido |
+| `WEBHOOK_SECRET_TOKEN` | Token secreto para validar requests de Telegram | Requerido |
+| `MONGO_URI` | Connection string de MongoDB | `mongodb://localhost:27017` |
+| `MONGO_INITDB_DATABASE` | Nombre de la base de datos | `Allergy_helper_db` |
+| `PORT` | Puerto HTTP (Cloud Run inyecta esto automáticamente) | `8080` |
+| `OCR_MODE` | Modo OCR: `stub` (texto fijo) o `google` (Google Vision) | `stub` |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Path al archivo JSON de credenciales de GCP (solo para `OCR_MODE=google`) | Opcional |
+
+## Uso
+
+### Comandos del bot
+
+#### Autenticación
+- `/start` — muestra el menú principal
+- `/login` — inicia sesión como owner (email + password) o guest (token compartido)
+- `/register` — crea una cuenta de owner
+- `/logout` — cierra la sesión del chat actual
+- `/cancel` — cancela el paso actual
+
+#### Gestión de alergias (solo owner)
+- `/add <ingredientes>` — agrega alergenos. Acepta un item o lista separada por comas:
+  ```
+  /add maní
+  /add maní, trigo, leche
+  ```
+  Los sinónimos se canonicalizan (ej: `cacahuete` → `peanut`), duplicados se ignoran.
+
+- `/listar` — muestra tus alergenos registrados con sus nombres canónicos:
+  ```
+  Tus alergias:
+  • maní (peanut)
+  • trigo (gluten)
+  ```
+
+- `/remove <ingredientes>` — elimina alergenos:
+  ```
+  /remove maní
+  /remove maní, trigo
+  ```
+
+#### Compartir acceso (solo owner)
+- `/share` — genera un token para que otros usuarios consulten tus alergias (solo lectura)
+- `/revoke` — revoca el token actual
+
+#### Consulta de ingredientes
+- **Texto**: envía cualquier mensaje sin comando con ingredientes:
+  ```
+  ingredientes: leche, huevo, harina
+  ```
+  El bot responde si detecta alergenos o si es seguro.
+
+- **Foto**: envía una foto de un producto:
+  - Sin caption → consulta los ingredientes detectados
+  - Con caption `/add` → agrega los ingredientes detectados a tus alergias
+  - Con otro caption → combina tu texto + OCR para consultar
+
+### Ejemplos
+
+**Registrar alergias**:
+```
+Usuario: /add maní, trigo, leche
+Bot: Alergias agregadas: maní, trigo, leche
+```
+
+**Consultar un producto**:
+```
+Usuario: ingredientes: leche, azúcar, cacao
+Bot: Alérgeno detectado: leche (leche)
+```
+
+**Escanear una foto**:
+```
+[Envía foto de un producto]
+Bot: Alérgeno detectado: maní (cacahuete, peanut)
+```
+
+## Arquitectura
+
+### Stack técnico
+- **Lenguaje**: C# / .NET 10
+- **Framework web**: ASP.NET Core Minimal API
+- **Base de datos**: MongoDB (sesiones, usuarios, tokens)
+- **OCR**: Google Cloud Vision API (opcional, stub por defecto)
+- **Bot**: Telegram.Bot library
+- **Deploy**: Docker + Cloud Run (serverless)
+
+### Estructura del proyecto
+```
+src/
+├─ Program.cs              → Entry point, DI, webhook endpoints
+├─ Models/                 → Entidades (User, ChatSession)
+├─ Data/
+│  ├─ MongoDbContext.cs    → Conexión MongoDB
+│  └─ Repositories/       → IUserRepository, UserRepository
+├─ Services/
+│  ├─ AuthService.cs       → Login/register/autorización
+│  ├─ AllergyService.cs    → Gestión de alergenos
+│  ├─ ShareService.cs      → Tokens de compartir
+│  └─ OcrService.cs        → OCR (stub/Google Vision)
+├─ Bots/
+│  ├─ BotAuthHandler.cs    → Lógica de comandos
+│  ├─ SessionAwareHandler.cs → Decorador de sesiones
+│  └─ BotCopy.cs           → Strings bilingües
+└─ Webhook/
+   └─ WebhookDispatcher.cs → Routing de updates de Telegram
+```
+
+### Decisiones de diseño
+- **MongoDB**: persistencia de sesiones, usuarios y tokens. Permite escalar a múltiples instancias.
+- **Webhook vs long-polling**: el bot expone un endpoint HTTPS (`/webhook`) en vez de hacer polling. Más eficiente para Cloud Run.
+- **Sesiones por chat**: cada chat tiene su propia sesión persistente, permite flujos conversacionales complejos.
+- **Canonicalización de alergenos**: un vocabulario mapea sinónimos a claves canónicas (ej: `maní`, `cacahuete`, `peanut` → `peanut`).
+- **OCR pluggable**: `OCR_MODE=stub` para desarrollo (sin credenciales), `OCR_MODE=google` para producción.
+
+## Desarrollo
+
+### Tests
+```bash
+# Unit tests
+dotnet test
+
+# Integration tests (requiere MongoDB corriendo)
+RUN_MONGO_TESTS=1 dotnet test
+```
+
+### Estructura de tests
+```
+tests/
+├─ Unit/                   → Tests de servicios y lógica
+├─ Integration/            → Tests con MongoDB real
+└─ Fakes/                  → Mocks y fakes para tests
+```
+
+## Licencia
+
+[Tu licencia aquí]
+
+## Contribuir
+
+[Guidelines de contribución aquí]
