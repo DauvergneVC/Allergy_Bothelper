@@ -230,4 +230,60 @@ public class SessionAwareHandlerTests
         Assert.Equal(ChatRole.Owner, store.Lookup(ChatB)!.Role);
         Assert.Equal(SessionState.Idle, store.Lookup(ChatB)!.State);
     }
+
+    [Fact]
+    public async Task CleanupGates_RemovesOldGates()
+    {
+        var (handler, _) = Create();
+
+        // Use two different chat IDs to create gates
+        await handler.HandleAsync(ChatA, new ChatSession(), "/start", null, CancellationToken.None);
+        await handler.HandleAsync(ChatB, new ChatSession(), "/start", null, CancellationToken.None);
+
+        // Wait a bit to make gates "old"
+        await Task.Delay(50);
+
+        // Cleanup with a very short maxAge (10ms) should remove both gates
+        var removed = handler.CleanupGates(TimeSpan.FromMilliseconds(10));
+
+        Assert.Equal(2, removed);
+    }
+
+    [Fact]
+    public async Task CleanupGates_KeepsRecentGates()
+    {
+        var (handler, _) = Create();
+
+        // Use ChatA to create a gate
+        await handler.HandleAsync(ChatA, new ChatSession(), "/start", null, CancellationToken.None);
+
+        // Wait a bit
+        await Task.Delay(50);
+
+        // Use ChatB to create a recent gate
+        await handler.HandleAsync(ChatB, new ChatSession(), "/start", null, CancellationToken.None);
+
+        // Cleanup with maxAge=30ms should remove ChatA but keep ChatB
+        var removed = handler.CleanupGates(TimeSpan.FromMilliseconds(30));
+
+        Assert.Equal(1, removed);
+    }
+
+    [Fact]
+    public async Task CleanupGates_HandlerStillWorksAfterCleanup()
+    {
+        var (handler, store) = Create();
+
+        // Use ChatA
+        await handler.HandleAsync(ChatA, new ChatSession(), "/start", null, CancellationToken.None);
+
+        // Cleanup all gates
+        handler.CleanupGates(TimeSpan.Zero);
+
+        // Handler should still work (recreates the gate)
+        var reply = await handler.HandleAsync(ChatA, new ChatSession(), "/help", null, CancellationToken.None);
+
+        Assert.NotNull(reply);
+        Assert.Equal(BotCopy.HelpCommandsLoggedOut, reply!.Text);
+    }
 }

@@ -17,7 +17,7 @@ public sealed class SessionAwareHandler : IBotAuthHandler
 
     private readonly IBotAuthHandler _inner;
     private readonly ISessionStore _store;
-    private readonly ConcurrentDictionary<long, SemaphoreSlim> _gates = new();
+    private readonly ConcurrentDictionary<long, (SemaphoreSlim gate, DateTime lastUsed)> _gates = new();
 
     public SessionAwareHandler(IBotAuthHandler inner, ISessionStore store)
     {
@@ -27,8 +27,9 @@ public sealed class SessionAwareHandler : IBotAuthHandler
 
     public async Task<BotReply?> HandleAsync(long chatId, ChatSession session, string? text, string? callbackData, CancellationToken ct, byte[]? photoBytes = null)
     {
-        var gate = _gates.GetOrAdd(chatId, _ => new SemaphoreSlim(1, 1));
-        await gate.WaitAsync(ct).ConfigureAwait(false);
+        var entry = _gates.GetOrAdd(chatId, _ => (new SemaphoreSlim(1, 1), DateTime.UtcNow));
+        _gates[chatId] = (entry.gate, DateTime.UtcNow); // Update lastUsed
+        await entry.gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             var current = await _store.LoadAsync(chatId, ct).ConfigureAwait(false);
@@ -62,8 +63,35 @@ public sealed class SessionAwareHandler : IBotAuthHandler
         }
         finally
         {
-            gate.Release();
+            entry.gate.Release();
         }
+    }
+
+    /// <summary>
+    /// Removes gates that haven't been used within the specified age. Call this periodically
+    /// (e.g., from a hosted service) to prevent unbounded memory growth in long-running bots.
+    /// </summary>
+    /// <param name="maxAge">Maximum age of a gate before it's eligible for removal.</param>
+    /// <returns>Number of gates removed.</returns>
+    public int CleanupGates(TimeSpan maxAge)
+    {
+        var cutoff = DateTime.UtcNow - maxAge;
+        var removed = 0;
+
+        foreach (var kvp in _gates)
+        {
+            if (kvp.Value.lastUsed < cutoff)
+            {
+                // Try to remove only if the value hasn't changed (thread-safe)
+                if (_gates.TryRemove(kvp))
+                {
+                    kvp.Value.gate.Dispose();
+                    removed++;
+                }
+            }
+        }
+
+        return removed;
     }
 
     private static ChatSession Snapshot(ChatSession session) => new()
