@@ -209,9 +209,3 @@ tests/
 ```
 
 ## Licencia
-
-[Tu licencia aquí]
-
-## Contribuir
-
-[Guidelines de contribución aquí]
